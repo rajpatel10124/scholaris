@@ -73,8 +73,8 @@ jobs:
             # docker-compose.yml + .env live in ~/scholoris on the EC2 host
             cd ~/scholoris
 
-            docker compose pull web
-            docker compose up -d --no-deps web
+            docker-compose pull web
+            docker-compose up -d --no-deps web
 
             # ── Prune old images to save disk space ───────────────────────
             docker image prune -f
