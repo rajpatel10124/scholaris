@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Submission Result — Scholaris{% endblock %}
+{% block content %}
+
+<style>
+    .result-wrap { max-width: 480px; margin: 80px auto; padding: 0 16px; }
+    .result-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; text-align: center; }
+    .result-icon-zone { padding: 40px 40px 24px; }
+    .result-icon { font-size: 3.5rem; display: block; margin-bottom: 12px; }
+    .result-title { font-family: var(--font-serif); font-size: 1.8rem; margin-bottom: 8px; }
+    .result-sub { font-size: 0.9rem; color: var(--ink-mute); max-width: 300px; margin: 0 auto 20px; }
+    .result-foot { padding: 20px; border-top: 1px solid var(--border); background: var(--surface); }
+</style>
+
+<div class="result-wrap fade-up">
+    <div class="result-card">
+        <div class="result-icon-zone">
+            {% if status == 'accepted' %}
+                <span class="result-icon">✅</span>
+                <div class="result-title" style="color:var(--success);">Accepted</div>
+                <p class="result-sub">Your work passed the plagiarism check and has been received.</p>
+            {% elif status == 'rejected' %}
+                <span class="result-icon">❌</span>
+                <div class="result-title" style="color:var(--danger);">Rejected</div>
+                <p class="result-sub">Copied content was detected. Please resubmit with your own original work.</p>
+            {% else %}
+                <span class="result-icon">⏳</span>
+                <div class="result-title" style="color:var(--review);">Under Review</div>
+                <p class="result-sub">Your file quality requires manual review by your instructor.</p>
+            {% endif %}
+        </div>
+        <div class="result-foot">
+            <a href="{{ url_for('dashboard') }}" class="btn-primary" style="display:inline-block;">
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

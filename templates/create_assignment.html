@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}New Assignment — Scholaris{% endblock %}
+{% block content %}
+
+<style>
+    .form-page { max-width: 780px; margin: 0 auto; padding: 40px 16px 60px; }
+    .form-section { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 16px; }
+    .form-section-title { font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-mute); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+    .form-section-title i { font-size: 1rem; color: var(--accent); }
+
+    .toggle-row {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 0; border-bottom: 1px solid var(--border);
+    }
+    .toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .toggle-label { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
+    .toggle-sub { font-size: 0.78rem; color: var(--ink-mute); margin-top: 2px; }
+    .form-switch .form-check-input {
+        width: 42px; height: 22px; cursor: pointer;
+        background-color: var(--surface-3); border-color: var(--surface-3);
+    }
+    .form-switch .form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+    .form-switch .form-check-input:focus { box-shadow: 0 0 0 3px rgba(91,94,244,0.15); }
+
+    .threshold-wrap { position: relative; }
+    .threshold-display {
+        position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+        font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700;
+        color: var(--accent); pointer-events: none;
+    }
+    input[type="range"] {
+        -webkit-appearance: none; width: 100%; height: 4px;
+        background: var(--surface-2); border-radius: 99px; outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 18px; height: 18px;
+        background: var(--accent); border-radius: 50%; border: 2px solid var(--white);
+        box-shadow: 0 2px 6px rgba(91,94,244,0.4); cursor: pointer;
+    }
+
+    .file-type-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .file-type-tag {
+        display: flex; align-items: center; gap: 5px;
+        background: var(--accent-3); color: var(--accent);
+        font-size: 0.78rem; font-weight: 600;
+        padding: 4px 10px; border-radius: 40px;
+    }
+    .file-type-tag.inactive { background: var(--surface-2); color: var(--ink-mute); }
+    .file-type-tag input { display: none; }
+
+    .upload-drop {
+        border: 2px dashed var(--surface-3); border-radius: var(--radius);
+        padding: 28px; text-align: center; cursor: pointer;
+        transition: all 0.2s; background: var(--surface);
+    }
+    .upload-drop:hover { border-color: var(--accent); background: var(--accent-3); }
+    .upload-drop i { font-size: 2rem; color: var(--ink-mute); margin-bottom: 8px; display: block; }
+</style>
+
+<div class="form-page fade-up">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('course_page', course_id=course.id) }}">{{ course.code }}</a></li>
+            <li class="breadcrumb-item active">New Assignment</li>
+        </ol>
+    </nav>
+
+    <div class="mb-4">
+        <h1 class="page-title">New Assignment</h1>
+        <p class="page-sub">Course: <strong>{{ course.name }}</strong></p>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data">
+
+        <!-- Basic Info -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-file-earmark-text"></i> Assignment Details</div>
+
+            <div class="mb-3">
+                <label class="form-label">Title</label>
+                <input type="text" name="title" class="form-control form-control-lg" placeholder="e.g. Final Project — Phase 1" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Short description shown in assignment list…"></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Instructions</label>
+                <textarea name="instructions" class="form-control" rows="5"
+                          placeholder="Full instructions, grading criteria, formatting requirements…"></textarea>
+                <div class="form-text">Shown to students on the submission page.</div>
+            </div>
+
+            <div class="mb-0">
+                <label class="form-label">Resource Files</label>
+                <div class="upload-drop" id="dropZone" onclick="document.getElementById('qFiles').click()">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    <div style="font-size:0.875rem;font-weight:600;color:var(--ink-soft);">Click to upload or drag & drop</div>
+                    <div style="font-size:0.78rem;color:var(--ink-mute);margin-top:4px;">PDF, DOCX, ZIP, Images — multiple files allowed</div>
+                    <input type="file" id="qFiles" name="question_files" multiple style="display:none;" onchange="showFiles(this)">
+                </div>
+                <div id="fileList" style="margin-top:8px;"></div>
+            </div>
+        </div>
+
+        <!-- Scheduling & Grading -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-calendar-event"></i> Scheduling & Grading</div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-5">
+                    <label class="form-label">Deadline</label>
+                    <input type="datetime-local" name="deadline" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Max Marks</label>
+                    <input type="number" name="max_marks" class="form-control" value="100" min="1" max="1000">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Max Attempts</label>
+                    <select name="attempt_limit" class="form-select">
+                        {% for n in [1,2,3,5,10,20] %}
+                        <option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="toggle-row">
+                <div>
+                    <div class="toggle-label">Allow Late Submissions</div>
+                    <div class="toggle-sub">Students can submit after the deadline; submissions are flagged as late</div>
+                </div>
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="allow_late_submission" role="switch">
+                </div>
+            </div>
+        </div>
+
+        <!-- File Restrictions -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-file-earmark-check"></i> File Restrictions</div>
+
+            <div class="mb-3">
+                <label class="form-label">Allowed File Types</label>
+                <div class="file-type-tags" id="fileTypeTags">
+                    {% set all_types = ['pdf','docx','jpg','jpeg','png','tiff','gif','webp'] %}
+                    {% set default_active = ['pdf','docx','jpg','png'] %}
+                    {% for t in all_types %}
+                    <label class="file-type-tag {{ '' if t in default_active else 'inactive' }}" id="tag-{{ t }}">
+                        <input type="checkbox" name="file_types" value="{{ t }}" {{ 'checked' if t in default_active }}
+                               onchange="updateTag('{{ t }}')">
+                        .{{ t }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <input type="hidden" name="allowed_file_types" id="allowedTypesHidden" value="pdf,docx,jpg,png">
+                <div class="form-text">Click to toggle. At least one type required.</div>
+            </div>
+
+            <div class="mb-0">
+                <label class="form-label">Max File Size (MB per file)</label>
+                <div class="row g-2 align-items-center">
+                    <div class="col-8">
+                        <input type="range" name="max_file_size" id="fileSizeRange" min="1" max="100" value="10"
+                               oninput="document.getElementById('fileSizeVal').textContent = this.value + ' MB'">
+                    </div>
+                    <div class="col-4">
+                        <span class="font-mono fw-bold" id="fileSizeVal" style="color:var(--accent);">10 MB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plagiarism Config -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-shield-check"></i> Plagiarism Detection</div>
+
+            <div class="toggle-row">
+                <div>
+                    <div class="toggle-label">Enable Plagiarism Check</div>
+                    <div class="toggle-sub">Run the full 7-step detection pipeline on every submission</div>
+                </div>
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="enable_plagiarism_check" role="switch" checked
+                           id="plagSwitch" onchange="togglePlagOptions()">
+                </div>
+            </div>
+
+            <div id="plagOptions">
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Check Handwritten / Scanned Images</div>
+                        <div class="toggle-sub">Run OpenCV preprocessing + OCR on image submissions</div>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" name="check_handwritten" role="switch" checked>
+                    </div>
+                </div>
+
+                <div class="toggle-row">
+                    <div style="flex:1; margin-right:20px;">
+                        <div class="toggle-label">Similarity Threshold</div>
+                        <div class="toggle-sub">Submissions at or above this score are auto-rejected. Set to 100 to accept all regardless of score.</div>
+                        <div style="margin-top:12px;">
+                            <input type="range" name="similarity_threshold" id="threshRange" min="0" max="100" value="40"
+                                   oninput="updateThreshDisplay(this.value)">
+                            <div class="d-flex justify-content-between mt-1">
+                                <span style="font-size:0.72rem;color:var(--ink-mute);">0% (reject all)</span>
+                                <span class="font-mono fw-bold" id="threshVal" style="color:var(--accent);">40%</span>
+                                <span style="font-size:0.72rem;color:var(--ink-mute);">100% (accept all)</span>
+                            </div>
+                        </div>
+                        {% for threshold, label, color in [
+                            (20,'Clean','var(--success)'),(40,'Low Risk','var(--success)'),
+                            (65,'Medium Risk','var(--warning)'),(100,'High Risk / Accept All','var(--danger)')
+                        ] %}
+                        <div style="font-size:0.72rem;color:var(--ink-mute);margin-top:4px;">
+                            <span style="color:{{ color }};font-weight:700;">{{ threshold }}%</span> = {{ label }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-3 mt-4">
+            <button type="submit" class="btn-primary" style="padding:12px 28px;font-size:0.95rem;">
+                <i class="bi bi-megaphone me-2"></i> Publish Assignment
+            </button>
+            <a href="{{ url_for('course_page', course_id=course.id) }}" class="btn-ghost" style="padding:12px 24px;font-size:0.95rem;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function updateThreshDisplay(v) {
+    document.getElementById('threshVal').textContent = v + '%';
+}
+function togglePlagOptions() {
+    document.getElementById('plagOptions').style.display =
+        document.getElementById('plagSwitch').checked ? 'block' : 'none';
+}
+function updateTag(type) {
+    const tag = document.getElementById('tag-' + type);
+    const checked = tag.querySelector('input').checked;
+    tag.className = 'file-type-tag ' + (checked ? '' : 'inactive');
+    const checked_types = [...document.querySelectorAll('#fileTypeTags input:checked')].map(i => i.value);
+    document.getElementById('allowedTypesHidden').value = checked_types.join(',');
+}
+function showFiles(input) {
+    const list = document.getElementById('fileList');
+    list.innerHTML = [...input.files].map(f =>
+        `<div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--ink-soft);margin-bottom:4px;">
+            <i class="bi bi-file-earmark-check" style="color:var(--accent);"></i> ${f.name}
+            <span style="color:var(--ink-mute);">(${(f.size/1024/1024).toFixed(2)} MB)</span>
+        </div>`
+    ).join('');
+}
+</script>
+
+{% endblock %}

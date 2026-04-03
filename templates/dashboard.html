@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Scholaris{% endblock %}
+{% block content %}
+
+<style>
+    .dash-header { padding: 36px 0 28px; }
+    .dash-greeting { font-family: var(--font-serif); font-size: 2rem; color: var(--ink); letter-spacing: -0.5px; margin-bottom: 4px; }
+    .dash-date { font-size: 0.85rem; color: var(--ink-mute); }
+
+    .course-card {
+        background: var(--white); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 0; overflow: hidden;
+        transition: all 0.22s; cursor: pointer; height: 100%;
+        display: flex; flex-direction: column;
+    }
+    .course-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
+    .course-card-color { height: 5px; }
+    .course-card-body { padding: 22px; flex: 1; display: flex; flex-direction: column; }
+    .course-code { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-mute); background: var(--surface); padding: 3px 8px; border-radius: 4px; display: inline-block; margin-bottom: 8px; }
+    .course-name { font-weight: 700; font-size: 1rem; color: var(--ink); margin-bottom: 4px; line-height: 1.3; }
+    .course-meta { font-size: 0.8rem; color: var(--ink-mute); margin-bottom: 16px; }
+    .course-stats { display: flex; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .course-stat { flex: 1; text-align: center; }
+    .course-stat-num { font-weight: 700; font-size: 1.1rem; color: var(--ink); display: block; }
+    .course-stat-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-mute); }
+    .course-actions { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+
+    .invite-chip {
+        display: flex; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-sm); padding: 6px 12px;
+        font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink-soft);
+        margin-bottom: 12px;
+    }
+    .invite-chip .copy-btn {
+        margin-left: auto; background: none; border: none;
+        color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 0;
+    }
+
+    .search-card {
+        background: var(--ink); border-radius: var(--radius-lg);
+        padding: 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+    }
+    .search-card::before {
+        content: ''; position: absolute; top: -50%; right: -10%;
+        width: 400px; height: 400px;
+        background: radial-gradient(circle, rgba(91,94,244,0.3) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .search-card h4 { font-family: var(--font-serif); color: #fff; font-size: 1.4rem; margin-bottom: 4px; }
+    .search-card p { color: rgba(255,255,255,0.5); font-size: 0.85rem; margin-bottom: 16px; }
+    .search-input-wrap { position: relative; }
+    .search-input-wrap input {
+        background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+        color: #fff; border-radius: var(--radius-sm); width: 100%; padding: 12px 16px;
+        font-size: 0.9rem; outline: none; transition: all 0.18s; font-family: var(--font-body);
+    }
+    .search-input-wrap input::placeholder { color: rgba(255,255,255,0.35); }
+    .search-input-wrap input:focus { border-color: var(--accent-2); background: rgba(255,255,255,0.15); }
+    .suggestion-box {
+        position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+        background: var(--white); border: 1px solid var(--border);
+        border-radius: var(--radius); box-shadow: var(--shadow-lg);
+        z-index: 999; overflow: hidden; max-height: 320px; overflow-y: auto;
+    }
+    .suggestion-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 16px; transition: background 0.14s; cursor: default;
+    }
+    .suggestion-item:hover { background: var(--surface); }
+    .suggestion-item + .suggestion-item { border-top: 1px solid var(--border); }
+    .suggestion-course-name { font-weight: 600; font-size: 0.875rem; color: var(--ink); }
+    .suggestion-course-meta { font-size: 0.78rem; color: var(--ink-mute); }
+
+    /* join by invite */
+    .invite-join-form { display: flex; gap: 8px; margin-top: 8px; }
+    .invite-join-form input { flex: 1; }
+
+    /* Admin stats */
+    .admin-stat-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .section-title { font-weight: 700; font-size: 1rem; color: var(--ink); }
+
+    .empty-state { text-align: center; padding: 60px 20px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); border-style: dashed; }
+    .empty-icon { font-size: 2.5rem; color: var(--surface-3); margin-bottom: 12px; display: block; }
+    .empty-title { font-weight: 700; color: var(--ink-soft); margin-bottom: 6px; }
+    .empty-sub { font-size: 0.85rem; color: var(--ink-mute); margin-bottom: 20px; }
+</style>
+
+<div class="container py-2">
+
+    <!-- HEADER -->
+    <div class="dash-header">
+        <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+            <div>
+                <p class="dash-date mb-1">{{ now.strftime('%A, %d %B %Y') if now else '' }}</p>
+                <h1 class="dash-greeting">
+                    {% if current_user.role == 'admin' %}System Overview
+                    {% else %}Hello, {{ current_user.username }} 👋{% endif %}
+                </h1>
+            </div>
+            <div class="d-flex gap-2">
+                {% if current_user.role == 'faculty' %}
+                    <a href="{{ url_for('create_course') }}" class="btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i> New Course
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ ADMIN DASHBOARD ════════════ -->
+    {% if current_user.role == 'admin' %}
+
+    <div class="admin-stat-row fade-up">
+        {% set stats = [
+            ('Total Users', total_users|default(0), 'bi-people', 'var(--accent-3)', 'var(--accent)'),
+            ('Courses', total_courses|default(0), 'bi-book', '#e0f2fe', '#0369a1'),
+            ('Submissions', total_subs|default(0), 'bi-file-earmark-arrow-up', '#dcfce7', '#16a34a'),
+            ('Flagged', total_flagged|default(0), 'bi-flag', '#fee2e2', '#dc2626'),
+            ('Rejected', total_rejected|default(0), 'bi-x-circle', '#fce7f3', '#be185d'),
+            ('Manual Review', total_manual|default(0), 'bi-eye', '#ede9fe', '#7c3aed'),
+        ] %}
+        {% for label, val, icon, bg, fg in stats %}
+        <div class="stat-card">
+            <div class="stat-num">{{ val }}</div>
+            <div class="stat-label">{{ label }}</div>
+            <i class="bi {{ icon }} stat-icon"></i>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card p-0 overflow-hidden">
+                <div class="d-flex align-items-center justify-content-between p-4 border-bottom">
+                    <span class="section-title mb-0">All Courses</span>
+                    <span class="text-ink-mute" style="font-size:0.8rem;">{{ courses|length }} total</span>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th class="ps-4">Course</th><th>Faculty</th><th>Students</th><th>Submissions</th><th>Status</th></tr></thead>
+                    <tbody>
+                    {% for c in courses %}
+                    <tr>
+                        <td class="ps-4">
+                            <span class="fw-600">{{ c.name }}</span>
+                            <div class="font-mono text-ink-mute" style="font-size:0.75rem;">{{ c.code }}</div>
+                        </td>
+                        <td>{{ c.faculty.username }}</td>
+                        <td>{{ c.students.count() }}</td>
+                        <td>—</td>
+                        <td><span class="status-badge {{ 'active' if c.is_active else 'closed' }}">{{ 'Active' if c.is_active else 'Inactive' }}</span></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-ink-mute py-4">No courses yet</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card p-4">
+                <div class="section-title mb-3">Recent Flagged</div>
+                {% for sub in flagged_subs|default([]) %}
+                <div class="d-flex align-items-start gap-2 mb-3 pb-3 border-bottom">
+                    <div class="user-avatar" style="background:var(--danger-bg);color:var(--danger);flex-shrink:0;">{{ sub.author.username[0]|upper }}</div>
+                    <div>
+                        <div style="font-size:0.85rem;font-weight:600;">{{ sub.author.username }}</div>
+                        <div style="font-size:0.75rem;color:var(--ink-mute);">{{ sub.reason[:50] }}</div>
+                    </div>
+                    <span class="status-badge rejected ms-auto" style="flex-shrink:0;">Rejected</span>
+                </div>
+                {% else %}
+                <p class="text-ink-mute" style="font-size:0.85rem;">No flagged submissions</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ STUDENT DASHBOARD ════════════ -->
+    {% elif current_user.role == 'student' %}
+
+    <!-- Search / Join card -->
+    <div class="search-card fade-up">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-6">
+                <h4>Join a Course</h4>
+                <p>Search by name or code, or enter an invite code directly</p>
+                <div class="search-input-wrap">
+                    <input type="text" id="masterSearch" placeholder="Type course name, code, or professor…" autocomplete="off">
+                    <div id="suggestionBox" class="suggestion-box" style="display:none;"></div>
+                </div>
+                <div class="invite-join-form mt-3">
+                    <input type="text" id="inviteInput" class="form-control" placeholder="Enter invite code (e.g. AB12CD34)" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15);color:#fff;">
+                    <button class="btn-primary" onclick="joinByInvite()" style="white-space:nowrap;">Join</button>
+                </div>
+            </div>
+            <div class="col-lg-4 d-none d-lg-block text-center" style="position:relative;z-index:1;">
+                <i class="bi bi-mortarboard" style="font-size:6rem;color:rgba(255,255,255,0.08);"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrolled courses -->
+    <div class="section-header">
+        <span class="section-title">My Courses</span>
+        <span class="text-ink-mute" style="font-size:0.82rem;">{{ courses|length }} enrolled</span>
+    </div>
+
+    {% if courses %}
+    <div class="row g-4 fade-up stagger-1">
+        {% for course in courses %}
+        <div class="col-md-6 col-lg-4">
+            <div class="course-card">
+                <div class="course-card-color" style="background:{{ course.cover_color|default('#5b5ef4') }};"></div>
+                <div class="course-card-body">
+                    <span class="course-code">{{ course.code }}</span>
+                    <div class="course-name">{{ course.name }}</div>
+                    <div class="course-meta"><i class="bi bi-person-badge me-1"></i>{{ course.faculty.username }}</div>
+                    <div class="course-stats">
+                        <div class="course-stat">
+                            <span class="course-stat-num">{{ course.assignments|length }}</span>
+                            <span class="course-stat-label">Tasks</span>
+                        </div>
+                        <div class="course-stat">
+                            <span class="course-stat-num">{{ course.semester|default('—') }}</span>
+                            <span class="course-stat-label">Semester</span>
+                        </div>
+                    </div>
+                    <div class="course-actions">
+                        <a href="{{ url_for('course_page', course_id=course.id) }}" class="btn-primary text-center" style="border-radius:var(--radius-sm);padding:9px;font-size:0.85rem;">
+                            Open classroom <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state fade-up">
+        <i class="empty-icon bi bi-journal-x"></i>
+        <div class="empty-title">No courses yet</div>
+        <div class="empty-sub">Search above or enter an invite code to join your first course.</div>
+    </div>
+    {% endif %}
+
+    <!-- ════════════ FACULTY DASHBOARD ════════════ -->
+    {% else %}
+
+    <!-- Quick stats row -->
+    <div class="admin-stat-row fade-up">
+        <div class="stat-card">
+            <div class="stat-num">{{ courses|length }}</div>
+            <div class="stat-label">My Courses</div>
+            <i class="bi bi-book stat-icon"></i>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num">{{ total_assignments|default(0) }}</div>
+            <div class="stat-label">Assignments</div>
+            <i class="bi bi-file-earmark stat-icon"></i>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num">{{ total_submissions|default(0) }}</div>
+            <div class="stat-label">Submissions</div>
+            <i class="bi bi-inbox stat-icon"></i>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num" style="color:var(--review);">{{ pending_reviews|default(0) }}</div>
+            <div class="stat-label">Pending Review</div>
+            <i class="bi bi-eye stat-icon"></i>
+        </div>
+    </div>
+
+    <div class="section-header">
+        <span class="section-title">My Courses</span>
+        <a href="{{ url_for('create_course') }}" class="btn-ghost btn-sm">+ New course</a>
+    </div>
+
+    {% if courses %}
+    <div class="row g-4 fade-up stagger-1">
+        {% for course in courses %}
+        <div class="col-md-6 col-lg-4">
+            <div class="course-card">
+                <div class="course-card-color" style="background:{{ course.cover_color|default('#5b5ef4') }};"></div>
+                <div class="course-card-body">
+                    <span class="course-code">{{ course.code }}</span>
+                    <div class="course-name">{{ course.name }}</div>
+                    <div class="course-meta"><i class="bi bi-calendar me-1"></i>{{ course.semester|default('') }} {{ course.year|default('') }}</div>
+
+                    <!-- Invite code chip -->
+                    {% if course.invite_code %}
+                    <div class="invite-chip">
+                        <i class="bi bi-key" style="color:var(--accent);"></i>
+                        <span id="ic-{{ course.id }}">{{ course.invite_code }}</span>
+                        <button class="copy-btn" onclick="copyInvite('{{ course.invite_code }}', {{ course.id }})">
+                            <i class="bi bi-copy" id="copy-icon-{{ course.id }}"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+
+                    <div class="course-stats">
+                        <div class="course-stat">
+                            <span class="course-stat-num">{{ course.assignments|length }}</span>
+                            <span class="course-stat-label">Tasks</span>
+                        </div>
+                        <div class="course-stat">
+                            <span class="course-stat-num">{{ course.students.count() }}</span>
+                            <span class="course-stat-label">Students</span>
+                        </div>
+                    </div>
+                    <div class="course-actions">
+                        <a href="{{ url_for('create_assignment', course_id=course.id) }}" class="btn-primary text-center" style="border-radius:var(--radius-sm);padding:9px;font-size:0.85rem;">
+                            <i class="bi bi-plus-lg me-1"></i> New Assignment
+                        </a>
+                        <a href="{{ url_for('view_reports', course_id=course.id) }}" class="btn-ghost text-center" style="border-radius:var(--radius-sm);padding:9px;font-size:0.85rem;">
+                            <i class="bi bi-bar-chart-line me-1"></i> Reports
+                        </a>
+                        <a href="{{ url_for('course_page', course_id=course.id) }}" class="btn-ghost text-center" style="border-radius:var(--radius-sm);padding:9px;font-size:0.85rem;">
+                            View Course
+                        </a>
+                        <form method="POST"
+                              action="{{ url_for('delete_course', course_id=course.id) }}"
+                              onsubmit="return confirm('Permanently delete course &quot;{{ course.name }}&quot; and ALL its assignments and submissions? This CANNOT be undone.')">
+                            <button type="submit" class="btn-ghost text-center w-100"
+                                    style="border-radius:var(--radius-sm);padding:9px;font-size:0.85rem;color:var(--danger);border-color:rgba(220,38,38,0.25);">
+                                <i class="bi bi-trash3 me-1"></i>Delete Course
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state fade-up">
+        <i class="empty-icon bi bi-folder-plus"></i>
+        <div class="empty-title">No courses yet</div>
+        <div class="empty-sub">Create your first course and start managing assignments.</div>
+        <a href="{{ url_for('create_course') }}" class="btn-primary">Create course</a>
+    </div>
+    {% endif %}
+    {% endif %}
+
+</div>
+
+<script>
+// ── Copy invite code ──
+function copyInvite(code, id) {
+    navigator.clipboard.writeText(code).then(() => {
+        const icon = document.getElementById('copy-icon-' + id);
+        if (icon) { icon.className = 'bi bi-check-lg'; setTimeout(() => { icon.className = 'bi bi-copy'; }, 1800); }
+    });
+}
+
+// ── Course search (student) ──
+const ENROLLED_IDS = [{% for c in courses %}{{ c.id }},{% endfor %}];
+const ALL_COURSES = [
+    {% if all_available_courses %}
+    {% for c in all_available_courses %}
+    { id: {{ c.id }}, name: "{{ c.name }}", code: "{{ c.code }}", prof: "{{ c.faculty.username }}" },
+    {% endfor %}
+    {% endif %}
+];
+
+const searchInput = document.getElementById('masterSearch');
+const suggestBox = document.getElementById('suggestionBox');
+
+if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        if (!q) { suggestBox.style.display = 'none'; return; }
+        const hits = ALL_COURSES.filter(c =>
+            c.name.toLowerCase().includes(q) ||
+            c.code.toLowerCase().includes(q) ||
+            c.prof.toLowerCase().includes(q)
+        );
+        if (!hits.length) { suggestBox.style.display = 'none'; return; }
+        suggestBox.innerHTML = hits.map(c => {
+            const enrolled = ENROLLED_IDS.includes(c.id);
+            return `<div class="suggestion-item">
+                <div>
+                    <div class="suggestion-course-name">${c.name}</div>
+                    <div class="suggestion-course-meta">${c.code} · ${c.prof}</div>
+                </div>
+                ${enrolled
+                    ? '<span class="status-badge active">Enrolled</span>'
+                    : `<button class="btn-primary btn-sm" onclick="enroll(${c.id},'${c.name}')">Join</button>`
+                }
+            </div>`;
+        }).join('');
+        suggestBox.style.display = 'block';
+    });
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !suggestBox.contains(e.target))
+            suggestBox.style.display = 'none';
+    });
+}
+
+function enroll(id, name) {
+    if (confirm(`Join course: ${name}?`)) window.location.href = `/enroll/${id}`;
+}
+function joinByInvite() {
+    const code = document.getElementById('inviteInput').value.trim();
+    if (code) window.location.href = `/join/${code}`;
+}
+</script>
+
+{% endblock %}

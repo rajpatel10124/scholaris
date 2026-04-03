@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}Bulk Run #{{ run.id }} — {{ assignment.title }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+
+  {# Breadcrumb #}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('course_page', course_id=course.id) }}">{{ course.name }}</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('bulk_check', course_id=course.id, assignment_id=assignment.id) }}">Bulk Check</a></li>
+      <li class="breadcrumb-item active">Run #{{ run.id }}</li>
+    </ol>
+  </nav>
+
+  {# Run header #}
+  <div class="run-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">
+        <i class="bi bi-archive text-primary me-2"></i>Bulk Run #{{ run.id }}
+      </h1>
+      <div class="text-muted small">
+        <i class="bi bi-calendar3 me-1"></i>{{ run.created_at.strftime('%A, %d %B %Y at %H:%M') }}
+        &nbsp;·&nbsp;
+        <i class="bi bi-person me-1"></i>{{ run.faculty.username }}
+        {% if run.elapsed_sec %}
+        &nbsp;·&nbsp;
+        <i class="bi bi-clock me-1"></i>{{ run.elapsed_sec|round(1) }}s
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('bulk_check', course_id=course.id, assignment_id=assignment.id) }}"
+         class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
+      <form method="POST"
+            action="{{ url_for('bulk_check_run_delete', course_id=course.id, assignment_id=assignment.id, run_id=run.id) }}"
+            onsubmit="return confirm('Delete this run permanently? This cannot be undone.')">
+        <button class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-trash3 me-1"></i>Delete Run
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# Summary stats bar #}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card stat-card--total">
+        <div class="stat-icon"><i class="bi bi-files"></i></div>
+        <div class="stat-value">{{ run.total_files }}</div>
+        <div class="stat-label">Total Files</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card stat-card--accept">
+        <div class="stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+        <div class="stat-value">{{ run.accepted }}</div>
+        <div class="stat-label">Accepted</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card stat-card--reject">
+        <div class="stat-icon"><i class="bi bi-x-circle-fill"></i></div>
+        <div class="stat-value">{{ run.rejected }}</div>
+        <div class="stat-label">Rejected</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card stat-card--review">
+        <div class="stat-icon"><i class="bi bi-eye-fill"></i></div>
+        <div class="stat-value">{{ run.manual_review }}</div>
+        <div class="stat-label">Manual Review</div>
+      </div>
+    </div>
+  </div>
+
+  {# Filter bar #}
+  <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <span class="text-muted small fw-semibold me-1">Filter:</span>
+    <button class="btn btn-sm btn-outline-secondary filter-btn active" data-filter="all">All ({{ run.results|length }})</button>
+    <button class="btn btn-sm btn-outline-success filter-btn" data-filter="accepted">Accepted ({{ run.accepted }})</button>
+    <button class="btn btn-sm btn-outline-danger filter-btn"  data-filter="rejected">Rejected ({{ run.rejected }})</button>
+    <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="manual_review">Review ({{ run.manual_review }})</button>
+
+    <div class="ms-auto">
+      <input type="text" class="form-control form-control-sm" id="searchInput"
+             placeholder="Search filename…" style="width:200px">
+    </div>
+  </div>
+
+  {# Results grid #}
+  {% if run.results %}
+  <div class="row g-3" id="resultsGrid">
+    {% for row in run.results %}
+    <div class="col-lg-6 result-col" data-verdict="{{ row.verdict }}" data-name="{{ row.filename|lower }}">
+      <div class="result-card">
+        <div class="result-header">
+          <div class="result-filename">{{ row.filename }}</div>
+          <div class="result-verdict">
+            {% if row.verdict == 'accepted' %}
+              <span class="status-badge accepted"><i class="bi bi-check-circle-fill me-1"></i>Accepted</span>
+            {% elif row.verdict == 'rejected' %}
+              <span class="status-badge rejected"><i class="bi bi-x-circle-fill me-1"></i>Rejected</span>
+            {% else %}
+              <span class="status-badge review"><i class="bi bi-eye-fill me-1"></i>Review</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="result-body">
+          <div class="result-metric">
+            <span class="metric-label">Peer Similarity</span>
+            <span class="metric-value {{ 'high-risk' if row.peer_score >= 40 else 'medium-risk' if row.peer_score >= 20 else 'low-risk' }}">{{ '%.1f'|format(row.peer_score) }}%</span>
+          </div>
+          <div class="result-metric">
+            <span class="metric-label">External Score</span>
+            <span class="metric-value {{ 'high-risk' if row.external_score >= 40 else 'medium-risk' if row.external_score >= 20 else 'low-risk' }}">{{ '%.1f'|format(row.external_score) }}%</span>
+          </div>
+          <div class="result-metric">
+            <span class="metric-label">OCR Confidence</span>
+            <span class="metric-value {{ 'low-risk' if row.ocr_confidence >= 80 else 'medium-risk' if row.ocr_confidence >= 50 else 'high-risk' }}">{{ '%.1f'|format(row.ocr_confidence) }}%</span>
+          </div>
+        </div>
+
+        <div class="result-footer">
+          <div class="result-reason">{{ row.reason }}</div>
+          <button class="btn btn-sm btn-outline-secondary toggle-details" data-target="#rr-{{ row.id }}">
+            <i class="bi bi-chevron-down me-1"></i>Details
+          </button>
+        </div>
+
+        {% if row.analysis_text %}
+        <div id="rr-{{ row.id }}" class="result-details collapse">
+          <pre class="analysis-text">{{ row.analysis_text }}</pre>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div id="noResultsMsg" class="alert alert-info mt-3" style="display:none;">
+    No files match the selected filter.
+  </div>
+
+  {% else %}
+    <div class="alert alert-info">This run has no file records.</div>
+  {% endif %}
+
+</div>
+
+<style>
+/* Stat cards */
+.stat-card {
+  border-radius: 12px; padding: 18px 20px;
+  display: flex; flex-direction: column; align-items: flex-start;
+  border: 1px solid var(--border); background: var(--white);
+}
+.stat-icon { font-size: 1.4rem; margin-bottom: 6px; opacity: .8; }
+.stat-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+.stat-label { font-size: .75rem; color: var(--ink-mute); margin-top: 4px; }
+
+.stat-card--total  { border-left: 4px solid #94a3b8; }
+.stat-card--total .stat-icon  { color: #64748b; }
+.stat-card--total .stat-value { color: #334155; }
+
+.stat-card--accept { border-left: 4px solid var(--success); }
+.stat-card--accept .stat-icon  { color: var(--success); }
+.stat-card--accept .stat-value { color: var(--success); }
+
+.stat-card--reject { border-left: 4px solid var(--danger); }
+.stat-card--reject .stat-icon  { color: var(--danger); }
+.stat-card--reject .stat-value { color: var(--danger); }
+
+.stat-card--review { border-left: 4px solid var(--warning); }
+.stat-card--review .stat-icon  { color: var(--warning); }
+.stat-card--review .stat-value { color: var(--warning); }
+
+/* Result cards (reuse same styles) */
+.result-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  transition: all .25s ease; box-shadow: var(--shadow-sm);
+}
+.result-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.result-header {
+  padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.result-filename { font-weight: 600; font-size: .85rem; color: var(--ink); word-break: break-all; }
+.result-body    { padding: 14px 16px; }
+.result-metric  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.metric-label   { font-size: .78rem; color: var(--ink-mute); }
+.metric-value   { font-weight: 600; font-size: .82rem; }
+.metric-value.high-risk   { color: var(--danger); }
+.metric-value.medium-risk { color: var(--warning); }
+.metric-value.low-risk    { color: var(--success); }
+.result-footer {
+  padding: 10px 16px; border-top: 1px solid var(--border);
+  background: var(--surface); display: flex; justify-content: space-between; align-items: center;
+}
+.result-reason  { font-size: .73rem; color: var(--ink-mute); flex: 1; margin-right: 10px; }
+.result-details { padding: 14px 16px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.analysis-text  { font-size: .72rem; color: var(--ink-soft); white-space: pre-wrap; margin:0; font-family: var(--font-mono); }
+</style>
+
+<script>
+// Filter buttons
+const filterBtns = document.querySelectorAll('.filter-btn');
+const cols = document.querySelectorAll('.result-col');
+const noMsg = document.getElementById('noResultsMsg');
+let currentFilter = 'all';
+let searchTerm = '';
+
+function applyFilters() {
+  let visible = 0;
+  cols.forEach(col => {
+    const verdict = col.dataset.verdict;
+    const name    = col.dataset.name;
+    const filterOk = currentFilter === 'all' || verdict === currentFilter;
+    const searchOk = !searchTerm || name.includes(searchTerm);
+    if (filterOk && searchOk) { col.style.display = ''; visible++; }
+    else { col.style.display = 'none'; }
+  });
+  noMsg.style.display = visible === 0 ? 'block' : 'none';
+}
+
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', function () {
+    filterBtns.forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentFilter = this.dataset.filter;
+    applyFilters();
+  });
+});
+
+document.getElementById('searchInput').addEventListener('input', function () {
+  searchTerm = this.value.toLowerCase().trim();
+  applyFilters();
+});
+
+// Toggle details
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.toggle-details').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const target = document.querySelector(this.dataset.target);
+      if (!target) return;
+      const bsc = new bootstrap.Collapse(target, { toggle: false });
+      const icon = this.querySelector('.bi-chevron-down');
+      if (target.classList.contains('show')) {
+        bsc.hide(); icon.style.transform = '';
+      } else {
+        bsc.show(); icon.style.transform = 'rotate(180deg)';
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

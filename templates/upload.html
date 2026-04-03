@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Submit — {{ assignment.title }}{% endblock %}
+{% block content %}
+
+<style>
+    .submit-wrap { max-width: 680px; margin: 0 auto; padding: 40px 16px 60px; }
+    .submit-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+
+    .submit-header { padding: 28px 28px 20px; border-bottom: 1px solid var(--border); }
+    .submit-body { padding: 28px; }
+
+    .info-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--surface); border: 1px solid var(--border); padding: 4px 12px; border-radius: 40px; font-size: 0.78rem; color: var(--ink-soft); }
+    .info-pill i { color: var(--accent); }
+
+    .attempt-meter { margin: 20px 0; }
+    .attempt-meter-bar { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 6px 0; }
+    .attempt-meter-fill { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
+
+    .dropzone {
+        border: 2px dashed var(--surface-3); border-radius: var(--radius);
+        padding: 40px 20px; text-align: center; cursor: pointer;
+        transition: all 0.22s; background: var(--surface); position: relative;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-3); }
+    .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .dropzone-icon { font-size: 2.5rem; color: var(--ink-mute); margin-bottom: 10px; display: block; transition: color 0.2s; }
+    .dropzone:hover .dropzone-icon { color: var(--accent); }
+    .dropzone-label { font-weight: 700; font-size: 0.95rem; color: var(--ink); margin-bottom: 4px; }
+    .dropzone-sub { font-size: 0.78rem; color: var(--ink-mute); }
+
+    .file-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .file-item {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.85rem;
+    }
+    .file-item-name { font-weight: 600; flex: 1; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item-size { font-size: 0.75rem; color: var(--ink-mute); white-space: nowrap; }
+    .file-item-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1rem; padding: 0; }
+    .file-item.error { border-color: var(--danger); background: var(--danger-bg); }
+
+    .instructions-box { background: var(--surface); border-left: 3px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 14px 16px; margin-bottom: 20px; }
+    .instructions-box p { font-size: 0.875rem; color: var(--ink-soft); margin: 0; white-space: pre-wrap; line-height: 1.6; }
+
+    .late-banner {
+        background: var(--warning-bg); border: 1px solid rgba(217,119,6,0.3);
+        border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 16px;
+        font-size: 0.82rem; color: var(--warning); display: flex; align-items: center; gap: 8px;
+    }
+
+    .submit-btn {
+        width: 100%; padding: 15px; font-size: 1rem; font-weight: 700;
+        background: var(--ink); color: #fff; border: none;
+        border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .submit-btn:hover { background: var(--accent); box-shadow: 0 6px 20px rgba(91,94,244,0.35); transform: translateY(-1px); }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+</style>
+
+<div class="submit-wrap fade-up">
+    <a href="{{ url_for('course_page', course_id=assignment.course_id) }}" style="display:inline-flex;align-items:center;gap:6px;color:var(--ink-mute);text-decoration:none;font-size:0.85rem;margin-bottom:20px;">
+        <i class="bi bi-arrow-left"></i> Back to course
+    </a>
+
+    <div class="submit-card">
+        <!-- Header -->
+        <div class="submit-header">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <h1 style="font-family:var(--font-serif);font-size:1.6rem;color:var(--ink);margin-bottom:8px;">{{ assignment.title }}</h1>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="info-pill"><i class="bi bi-calendar-event"></i> Due {{ assignment.deadline.strftime('%d %b %Y, %H:%M') }}</span>
+                        <span class="info-pill"><i class="bi bi-award"></i> {{ assignment.max_marks|default(100) }} marks</span>
+                        <span class="info-pill"><i class="bi bi-hash"></i> {{ attempts_allowed }} attempts</span>
+                        <span class="info-pill"><i class="bi bi-file-earmark"></i> {{ allowed_types|join(', ') }}</span>
+                        <span class="info-pill"><i class="bi bi-hdd"></i> {{ max_file_size }} MB/file</span>
+                    </div>
+                </div>
+                {% if is_late %}
+                <span class="status-badge manual_review">Late Submission</span>
+                {% elif remaining_attempts > 0 %}
+                <span class="status-badge active">Open</span>
+                {% else %}
+                <span class="status-badge closed">Closed</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="submit-body">
+
+            {% if is_late %}
+            <div class="late-banner">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>The deadline has passed. Your submission will be flagged as <strong>late</strong>.</span>
+            </div>
+            {% endif %}
+
+            <!-- Instructions -->
+            {% if assignment.instructions %}
+            <div class="instructions-box">
+                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);margin-bottom:6px;">Instructions</div>
+                <p>{{ assignment.instructions }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Resource files -->
+            {% if assignment.question_file %}
+            <div class="mb-4">
+                <div style="font-size:0.82rem;font-weight:700;color:var(--ink-soft);margin-bottom:8px;">Resource Files</div>
+                {% for file in assignment.question_file.split(',') %}
+                {% if file.strip() %}
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;">
+                    <i class="bi bi-file-earmark-arrow-down" style="color:var(--accent);"></i>
+                    <span style="font-size:0.83rem;flex:1;">{{ file.split('_')|last }}</span>
+                    <a href="{{ url_for('download_file', filepath=file.strip()) }}" class="btn-ghost btn-sm">Download</a>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Attempt counter -->
+            <div class="attempt-meter">
+                <div class="d-flex justify-content-between">
+                    <span style="font-size:0.8rem;color:var(--ink-mute);font-weight:600;">Attempts Used</span>
+                    <span style="font-size:0.8rem;font-weight:700;color:{{ 'var(--danger)' if remaining_attempts == 0 else 'var(--ink)' }};">{{ attempts_used }} / {{ attempts_allowed }}</span>
+                </div>
+                <div class="attempt-meter-bar">
+                    <div class="attempt-meter-fill"
+                         style="width:{{ [attempts_used / attempts_allowed * 100, 100]|min }}%;background:{{ 'var(--danger)' if remaining_attempts == 0 else 'var(--accent)' }};"></div>
+                </div>
+                <div style="font-size:0.75rem;color:var(--ink-mute);">{{ remaining_attempts }} attempt{{ 's' if remaining_attempts != 1 }} remaining</div>
+            </div>
+
+            {% if remaining_attempts > 0 %}
+            <!-- Upload form -->
+            <form action="{{ url_for('submit', assignment_id=assignment.id) }}" method="POST" enctype="multipart/form-data" id="submission-form" onsubmit="return validateSubmit()">
+
+                <div class="dropzone" id="dropZone">
+                    <input type="file" name="files" id="fileInput" multiple
+                           accept="{{ allowed_types|map('regex_replace', '^', '.')|join(',') }}"
+                           onchange="handleFiles(this.files)">
+                    <span class="dropzone-icon"><i class="bi bi-cloud-arrow-up-fill"></i></span>
+                    <div class="dropzone-label">Click or drag files here</div>
+                    <div class="dropzone-sub">Up to 5 files · {{ allowed_types|join(', ') }} · Max {{ max_file_size }} MB each</div>
+                </div>
+
+                <div class="file-list" id="fileList"></div>
+
+                <div style="margin-top:6px;" id="fileCountMsg"></div>
+
+                <div class="mt-4">
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <i class="bi bi-shield-check-fill"></i>
+                        <span id="submitText">Submit for Integrity Scan</span>
+                    </button>
+                    <p style="font-size:0.73rem;text-align:center;color:var(--ink-mute);margin-top:10px;">
+                        <i class="bi bi-lock me-1"></i> By submitting, you confirm this is original work. Processing may take up to 10 seconds.
+                    </p>
+                </div>
+            </form>
+            {% else %}
+            <div style="text-align:center;padding:40px;background:var(--danger-bg);border-radius:var(--radius);border:1px solid rgba(220,38,38,0.2);">
+                <i class="bi bi-lock-fill" style="font-size:2rem;color:var(--danger);display:block;margin-bottom:10px;"></i>
+                <div style="font-weight:700;color:var(--danger);font-size:1rem;">Attempt Limit Reached</div>
+                <div style="font-size:0.85rem;color:var(--ink-mute);margin-top:6px;">You have used all {{ attempts_allowed }} available attempts.</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+const MAX_FILES = 5;
+const MAX_SIZE_MB = {{ max_file_size }};
+const ALLOWED = {{ allowed_types|tojson }};
+let selectedFiles = [];
+
+function handleFiles(files) {
+    const arr = Array.from(files);
+    const errors = [];
+    const valid = [];
+    arr.forEach(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        if (!ALLOWED.includes(ext)) { errors.push(`${f.name}: type not allowed`); return; }
+        if (f.size > MAX_SIZE_MB * 1024 * 1024) { errors.push(`${f.name}: exceeds ${MAX_SIZE_MB} MB`); return; }
+        valid.push(f);
+    });
+    if (selectedFiles.length + valid.length > MAX_FILES) {
+        errors.push(`Maximum ${MAX_FILES} files per submission`);
+        valid.splice(MAX_FILES - selectedFiles.length);
+    }
+    selectedFiles = [...selectedFiles, ...valid];
+    renderFileList();
+    if (errors.length) showMsg(errors.join(' · '), 'danger');
+    else clearMsg();
+}
+
+function removeFile(i) {
+    selectedFiles.splice(i, 1);
+    renderFileList();
+}
+
+function renderFileList() {
+    const list = document.getElementById('fileList');
+    if (!selectedFiles.length) { list.innerHTML = ''; return; }
+    list.innerHTML = selectedFiles.map((f, i) => `
+        <div class="file-item">
+            <i class="bi bi-file-earmark-check" style="color:var(--success);font-size:1.1rem;"></i>
+            <span class="file-item-name">${f.name}</span>
+            <span class="file-item-size">${(f.size/1024/1024).toFixed(2)} MB</span>
+            <button type="button" class="file-item-remove" onclick="removeFile(${i})" title="Remove">
+                <i class="bi bi-x-circle-fill"></i>
+            </button>
+        </div>
+    `).join('');
+    document.getElementById('fileCountMsg').innerHTML =
+        `<span style="font-size:0.78rem;color:var(--ink-mute);">${selectedFiles.length}/${MAX_FILES} file${selectedFiles.length>1?'s':''} selected</span>`;
+}
+
+function showMsg(msg, type) {
+    document.getElementById('fileCountMsg').innerHTML =
+        `<span style="font-size:0.78rem;color:var(--${type});">${msg}</span>`;
+}
+function clearMsg() {}
+
+function validateSubmit() {
+    if (!selectedFiles.length) {
+        showMsg('Please select at least one file.', 'danger');
+        return false;
+    }
+    // Attach files to form
+    const dt = new DataTransfer();
+    selectedFiles.forEach(f => dt.items.add(f));
+    document.getElementById('fileInput').files = dt.files;
+    const btn = document.getElementById('submitBtn');
+    const text = document.getElementById('submitText');
+    btn.disabled = true;
+    text.innerHTML = '<span class="loading-dots">Scanning</span>';
+    btn.innerHTML = '<div class="spinner-ring" style="width:16px;height:16px;border-width:2px;margin-right:8px;"></div>' + text.outerHTML;
+    document.getElementById('plagiarism-overlay').classList.add('show');
+    return true;
+}
+
+// Drag & drop
+const dz = document.getElementById('dropZone');
+if (dz) {
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+}
+</script>
+
+{% endblock %}

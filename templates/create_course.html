@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}New Course — Scholaris{% endblock %}
+{% block content %}
+
+<style>
+    .form-page { max-width: 700px; margin: 0 auto; padding: 40px 16px 60px; }
+    .form-section { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 28px; margin-bottom: 16px; }
+    .form-section-title { font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-mute); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+    .form-section-title i { font-size: 1rem; color: var(--accent); }
+    .color-picker-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .color-swatch { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2.5px solid transparent; transition: all 0.15s; }
+    .color-swatch:hover { transform: scale(1.15); }
+    .color-swatch.selected { border-color: var(--ink); box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--ink); }
+    .invite-preview {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-sm); padding: 10px 14px;
+        font-family: var(--font-mono); font-size: 0.88rem; color: var(--ink-soft);
+    }
+    .invite-preview .code { font-size: 1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; }
+    .invite-badge { background: var(--success-bg); color: var(--success); font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 40px; }
+</style>
+
+<div class="form-page fade-up">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+            <li class="breadcrumb-item active">New Course</li>
+        </ol>
+    </nav>
+
+    <div class="mb-4">
+        <h1 class="page-title">Create a course</h1>
+        <p class="page-sub">Set up your classroom, configure access, and invite students.</p>
+    </div>
+
+    <form action="{{ url_for('create_course') }}" method="POST">
+
+        <!-- Basic Info -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-info-circle"></i> Basic Information</div>
+
+            <div class="mb-3">
+                <label class="form-label">Course Title</label>
+                <input type="text" name="name" class="form-control" placeholder="e.g. Advanced Machine Learning" required>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Course Code <span style="color:var(--ink-mute);font-weight:400;">(unique)</span></label>
+                    <input type="text" name="code" class="form-control font-mono" placeholder="e.g. CS501-2026" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Semester</label>
+                    <select name="semester" class="form-select">
+                        <option value="Spring">Spring</option>
+                        <option value="Summer">Summer</option>
+                        <option value="Fall">Fall</option>
+                        <option value="Winter">Winter</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Year</label>
+                    <input type="number" name="year" class="form-control" value="{{ now.year if now else 2026 }}" min="2020" max="2030">
+                </div>
+            </div>
+
+            <div class="mb-0">
+                <label class="form-label">Description <span style="color:var(--ink-mute);font-weight:400;">(optional)</span></label>
+                <textarea name="description" class="form-control" rows="3" placeholder="Brief overview of what this course covers…"></textarea>
+            </div>
+        </div>
+
+        <!-- Cover Color -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-palette"></i> Course Color</div>
+            <p style="font-size:0.83rem;color:var(--ink-mute);margin-bottom:14px;">Choose an accent color for this course card.</p>
+            <input type="hidden" name="cover_color" id="coverColorInput" value="#5b5ef4">
+            <div class="color-picker-row" id="colorPicker">
+                {% set colors = ['#5b5ef4','#0369a1','#16a34a','#d97706','#dc2626','#be185d','#7c3aed','#0891b2','#059669','#b45309'] %}
+                {% for c in colors %}
+                <div class="color-swatch {{ 'selected' if c == '#5b5ef4' }}" style="background:{{ c }};" data-color="{{ c }}" onclick="selectColor('{{ c }}')"></div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Invite Code preview -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-key"></i> Invite Code</div>
+            <p style="font-size:0.83rem;color:var(--ink-mute);margin-bottom:14px;">An 8-character invite code is automatically generated. Students use this to join your course.</p>
+            <div class="invite-preview">
+                <i class="bi bi-key-fill" style="color:var(--accent);"></i>
+                <span class="code" id="invitePreviewCode">—</span>
+                <span class="invite-badge">Auto-generated on create</span>
+            </div>
+        </div>
+
+        <!-- Student invite by email -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-envelope"></i> Invite Students by Email <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></div>
+            <label class="form-label">Email addresses</label>
+            <textarea name="invite_emails" class="form-control font-mono" rows="3"
+                      placeholder="student1@university.edu, student2@university.edu, …"></textarea>
+            <div class="form-text mt-1">Comma-separated. Each student receives an email with the invite code.</div>
+        </div>
+
+        <div class="d-flex gap-3 mt-4">
+            <button type="submit" class="btn-primary" style="padding:12px 28px;font-size:0.95rem;">
+                <i class="bi bi-rocket-takeoff me-2"></i> Launch Course
+            </button>
+            <a href="{{ url_for('dashboard') }}" class="btn-ghost" style="padding:12px 24px;font-size:0.95rem;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function selectColor(c) {
+    document.getElementById('coverColorInput').value = c;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    document.querySelector(`.color-swatch[data-color="${c}"]`).classList.add('selected');
+}
+// Show sample code hint
+document.getElementById('invitePreviewCode').textContent = '— will be generated —';
+</script>
+
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Scholaris — Academic Integrity Platform{% endblock %}
+{% block content %}
+
+<style>
+    .hero-section {
+        min-height: calc(100vh - var(--nav-h));
+        display: flex; align-items: center;
+        background: var(--white);
+        position: relative; overflow: hidden;
+    }
+    .hero-grid {
+        position: absolute; inset: 0; opacity: 0.035;
+        background-image:
+            linear-gradient(var(--ink) 1px, transparent 1px),
+            linear-gradient(90deg, var(--ink) 1px, transparent 1px);
+        background-size: 40px 40px;
+    }
+    .hero-blob {
+        position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none;
+    }
+    .blob-1 { width: 500px; height: 500px; background: rgba(91,94,244,0.07); top: -100px; right: -100px; }
+    .blob-2 { width: 300px; height: 300px; background: rgba(139,143,250,0.05); bottom: 0; left: -50px; }
+    .hero-eyebrow {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: var(--accent-3); color: var(--accent);
+        font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+        padding: 5px 14px; border-radius: 40px; margin-bottom: 24px;
+    }
+    .hero-eyebrow::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+    .hero-title {
+        font-family: var(--font-serif);
+        font-size: clamp(2.8rem, 6vw, 4.5rem);
+        line-height: 1.07;
+        color: var(--ink);
+        letter-spacing: -1px;
+        margin-bottom: 24px;
+    }
+    .hero-title em { color: var(--accent); font-style: italic; }
+    .hero-sub { font-size: 1.05rem; color: var(--ink-mute); max-width: 480px; line-height: 1.7; margin-bottom: 40px; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .hero-actions .btn-primary { padding: 13px 28px; font-size: 0.95rem; border-radius: var(--radius-sm); }
+    .hero-actions .btn-ghost { padding: 13px 28px; font-size: 0.95rem; }
+
+    .feature-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    .feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 28px 24px;
+        transition: all 0.22s;
+    }
+    .feature-card:hover { background: var(--white); box-shadow: var(--shadow); transform: translateY(-3px); }
+    .feature-icon {
+        width: 44px; height: 44px;
+        background: var(--accent-3); color: var(--accent);
+        border-radius: var(--radius-sm);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2rem; margin-bottom: 16px;
+    }
+    .feature-title { font-weight: 700; font-size: 0.95rem; color: var(--ink); margin-bottom: 6px; }
+    .feature-desc { font-size: 0.84rem; color: var(--ink-mute); line-height: 1.6; }
+
+    .social-proof {
+        display: flex; align-items: center; gap: 16px; margin-top: 40px;
+        padding-top: 32px; border-top: 1px solid var(--border);
+    }
+    .proof-avatars { display: flex; }
+    .proof-avatar {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: var(--accent-3); border: 2px solid var(--white);
+        margin-left: -8px; display: flex; align-items: center; justify-content: center;
+        font-size: 0.72rem; font-weight: 700; color: var(--accent);
+    }
+    .proof-avatar:first-child { margin-left: 0; }
+    .proof-text { font-size: 0.83rem; color: var(--ink-mute); }
+    .proof-text strong { color: var(--ink); }
+
+    @media (max-width: 768px) {
+        .feature-grid { grid-template-columns: 1fr; }
+        .hero-title { font-size: 2.4rem; }
+    }
+</style>
+
+<section class="hero-section">
+    <div class="hero-grid"></div>
+    <div class="hero-blob blob-1"></div>
+    <div class="hero-blob blob-2"></div>
+
+    <div class="container py-5">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6 fade-up">
+                <div class="hero-eyebrow">Academic Integrity Platform</div>
+                <h1 class="hero-title">
+                    Where honest work<br>gets its <em>fair verdict</em>
+                </h1>
+                <p class="hero-sub">
+                    Automated plagiarism detection with handwriting OCR, AI-text detection,
+                    and peer comparison. Built for faculty. Trusted by students.
+                </p>
+                <div class="hero-actions">
+                    <a href="{{ url_for('signup') }}" class="btn-primary">Start for free</a>
+                    <a href="{{ url_for('login') }}" class="btn-ghost" style="border:1px solid var(--border); border-radius:var(--radius-sm);">Sign in</a>
+                </div>
+                <div class="social-proof">
+                    <div class="proof-avatars">
+                        {% for letter in ['A','B','C','D'] %}
+                        <div class="proof-avatar">{{ letter }}</div>
+                        {% endfor %}
+                    </div>
+                    <p class="proof-text mb-0"><strong>Trusted</strong> by faculty across institutions</p>
+                </div>
+            </div>
+
+            <div class="col-lg-6 fade-up stagger-2">
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="bi bi-eye"></i></div>
+                        <div class="feature-title">Handwriting OCR</div>
+                        <div class="feature-desc">Converts scanned or photographed handwritten work into analysable text.</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" style="background:#e0f2fe;color:#0369a1;"><i class="bi bi-robot"></i></div>
+                        <div class="feature-title">AI Detection</div>
+                        <div class="feature-desc">Identifies GPT-generated text patterns, transition density & hedging signals.</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-shield-check"></i></div>
+                        <div class="feature-title">Peer Comparison</div>
+                        <div class="feature-desc">Semantic + structural + stylometric 3-signal fusion across all submissions.</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" style="background:#fce7f3;color:#be185d;"><i class="bi bi-people"></i></div>
+                        <div class="feature-title">Role-Based Access</div>
+                        <div class="feature-desc">Students see verdicts only. Faculty get full reports. Admins see everything.</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-lightning-charge"></i></div>
+                        <div class="feature-title">Instant Results</div>
+                        <div class="feature-desc">Synchronous check — student waits on the same HTTP request. No polling.</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" style="background:#ede9fe;color:#7c3aed;"><i class="bi bi-bar-chart-line"></i></div>
+                        <div class="feature-title">Rich Reports</div>
+                        <div class="feature-desc">Faculty view passage-level match comparisons, risk levels & OCR confidence.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
