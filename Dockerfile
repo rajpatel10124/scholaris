@@ -55,10 +55,10 @@ RUN mkdir -p /app/static/uploads
 EXPOSE 5000
 
 # Run with Gunicorn (already in requirements.txt)
-# --workers: 2 × CPU + 1 is the standard formula; 3 is safe for a t3.small
+# --workers: 2 is safe for a t3.small EC2 (prevents OOM when loading ML models)
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
-     "--workers", "3", \
+     "--workers", "2", \
      "--timeout", "300", \
      "--log-level", "info", \
      "app:app"]

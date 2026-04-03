@@ -779,7 +779,7 @@ def _extract_pdf_text(path: str, check_handwritten: bool = True) -> tuple:
     try:
         import psutil as _psutil
         free_mb = _psutil.virtual_memory().available / (1024 * 1024)
-        if free_mb < 300:
+        if free_mb < 100:
             print(f"[PDF] Only {free_mb:.0f} MB free — skipping OCR")
             return "", 0.0
     except Exception:
@@ -814,7 +814,7 @@ def _extract_pdf_text(path: str, check_handwritten: bool = True) -> tuple:
         for idx, gray_arr in enumerate(page_arrays, start=1):
             try:
                 import psutil as _psutil
-                if _psutil.virtual_memory().available < 250 * 1024 * 1024:
+                if _psutil.virtual_memory().available < 80 * 1024 * 1024:
                     print(f"[PDF] Low memory at page {idx} — stopping")
                     break
             except Exception:
@@ -912,7 +912,7 @@ def _extract_pdf_text_bulk(path: str) -> tuple:
     try:
         import psutil as _psutil
         free_mb = _psutil.virtual_memory().available / (1024 * 1024)
-        if free_mb < 300:
+        if free_mb < 100:
             print(f"[PDF-bulk] Only {free_mb:.0f} MB free — skipping OCR to protect stability")
             return "", 0.0
     except Exception:
@@ -950,7 +950,7 @@ def _extract_pdf_text_bulk(path: str) -> tuple:
             # Per-page memory guard
             try:
                 import psutil as _psutil
-                if _psutil.virtual_memory().available < 250 * 1024 * 1024:
+                if _psutil.virtual_memory().available < 80 * 1024 * 1024:
                     print(f"[PDF-bulk] Low memory at page {idx} — stopping")
                     gray_arr = None; gc.collect()
                     break
@@ -1125,7 +1125,7 @@ def extract_text_bulk(file_path: str) -> tuple:
             # Images: Tesseract CLI subprocess (memory-isolated)
             try:
                 import psutil as _psutil
-                if _psutil.virtual_memory().available < 300 * 1024 * 1024:
+                if _psutil.virtual_memory().available < 100 * 1024 * 1024:
                     print("[extract_text_bulk] Low memory — skipping image OCR")
                 else:
                     pil_img = Image.open(file_path)
