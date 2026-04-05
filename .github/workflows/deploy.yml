@@ -70,10 +70,9 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
 
             # ── Gracefully restart the app container ──────────────────────
-            # docker-compose.yml + .env live in ~/scholoris on the EC2 host
-            cd ~/scholoris
+            # docker-compose.yml + .env live in ~/scholaris on the EC2 host
+            cd ~/scholaris
 
-            docker-compose pull web
             docker-compose up -d --no-deps web
 
             # ── Prune old images to save disk space ───────────────────────
