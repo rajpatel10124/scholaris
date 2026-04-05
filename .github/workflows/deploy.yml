@@ -63,7 +63,14 @@ jobs:
           script: |
             set -e
 
-            # ── Pull the freshly built image ──────────────────────────────
+            # ── Ensure Docker Compose V2 is installed (Binary Download) ────
+            if ! docker compose version &>/dev/null; then
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              sudo mkdir -p /usr/lib/docker/cli-plugins
+              sudo ln -sf /usr/local/bin/docker-compose /usr/lib/docker/cli-plugins/docker-compose
+            fi
+
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
               docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
@@ -73,7 +80,7 @@ jobs:
             # docker-compose.yml + .env live in ~/scholaris on the EC2 host
             cd ~/scholaris
 
-            docker-compose up -d --no-deps web
+            docker compose up -d --no-deps web
 
             # ── Prune old images to save disk space ───────────────────────
             docker image prune -f
