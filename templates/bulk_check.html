@@ -281,7 +281,11 @@
 
 <script>
 const MAX_SIZE = 1 * 1024 * 1024 * 1024;
-const socket = io();
+const socket = io({
+    transports: ['websocket', 'polling'],
+    upgrade: true,
+    reconnection: true
+});
 
 // Ensure user joins their specific run room
 socket.on('connect', () => {
@@ -341,7 +345,7 @@ document.getElementById('bulkForm').addEventListener('submit', async function (e
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 filename: file.name,
-                assignment_id: {{ assignment.id }}
+                assignment_id: "{{ assignment.id if assignment else '' }}"
             })
         });
         

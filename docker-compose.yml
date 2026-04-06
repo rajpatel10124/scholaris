@@ -6,7 +6,7 @@ services:
 
   # ── Flask / Gunicorn application ──────────────────────────────────────────
   web:
-    image: rajpatel1202/scholaris:latest
+    build: .
     restart: unless-stopped
     ports:
       - "5000:5000"
