@@ -282,8 +282,8 @@
 <script>
 const MAX_SIZE = 1 * 1024 * 1024 * 1024;
 const socket = io({
-    transports: ['websocket', 'polling'],
-    upgrade: true,
+    transports: ['polling'],
+    upgrade: false,
     reconnection: true
 });
 

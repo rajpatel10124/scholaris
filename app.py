@@ -70,7 +70,14 @@ app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB (bulk ZIP uploads)
 
 # Initialize SocketIO for real-time progress tracking
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, 
+                    cors_allowed_origins="*", 
+                    async_mode='gevent',
+                    transports=['polling'], # Ensure only proxy-safe polling is used
+                    ping_timeout=60,
+                    ping_interval=25,
+                    engineio_logger=False,
+                    logger=False)
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
