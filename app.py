@@ -1586,6 +1586,7 @@ def bulk_check(course_id, assignment_id):
 def bulk_status(course_id, assignment_id, run_id):
     if current_user.role != 'faculty': abort(403)
     run = db.get_or_404(BulkCheckRun, run_id)
+    db.session.refresh(run) # Force sync with background scanning thread
     if run.status == 'completed':
         return redirect(url_for('bulk_check_run_view', course_id=course_id, assignment_id=assignment_id, run_id=run.id))
     return render_template('bulk_status.html', course=db.get_or_404(Course, course_id), assignment=db.get_or_404(Assignment, assignment_id), run=run)
