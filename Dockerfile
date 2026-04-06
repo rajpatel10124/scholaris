@@ -59,7 +59,7 @@ EXPOSE 5000
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
      "--workers", "1", \
-     "--worker-class", "eventlet", \
+     "--worker-class", "gevent", \
      "--timeout", "3600", \
      "--log-level", "info", \
      "app:app"]

@@ -1,3 +1,6 @@
+import gevent.monkey
+gevent.monkey.patch_all()
+
 """
 app.py  —  Scholaris Academic Integrity Platform
 Fully aligned with all HTML templates. Covers:
@@ -64,7 +67,7 @@ app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB (bulk ZIP uploads)
 
 # Initialize SocketIO for real-time progress tracking
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
