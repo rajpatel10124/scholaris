@@ -180,6 +180,23 @@ OTP_MAX_ATTEMPTS = 3     # brute-force protection
 # ── EXTENSIONS ────────────────────────────────────────────────────────────────
 db.init_app(app)
 
+# --- GLOBAL SELF-HEALING DB SYNC (DIRECT-ACCESS) ---
+with app.app_context():
+    import psycopg2
+    try:
+        # Use a raw connection to bypass SQLAlchemy metadata caching issues
+        raw_conn = psycopg2.connect(app.config['SQLALCHEMY_DATABASE_URI'])
+        raw_conn.autocommit = True
+        with raw_conn.cursor() as cur:
+            for col, dtype in [('processed_count','INT'),('status','VARCHAR(20)'),('accepted','INT'),('rejected','INT'),('manual_review','INT'),('elapsed_sec','FLOAT')]:
+                try:
+                    cur.execute(f"ALTER TABLE bulk_check_run ADD COLUMN IF NOT EXISTS {col} {dtype}")
+                except Exception: pass
+        raw_conn.close()
+        print("[DB] Global Sync (Direct) Complete.")
+    except Exception as e:
+        print(f"[DB] Global Sync (Direct) Error: {e}")
+
 bcrypt = Bcrypt(app)
 
 login_mgr = LoginManager(app)
@@ -1429,9 +1446,9 @@ def run_bulk_check_task(app, run_id, temp_dir, filtered_paths, assignment_id, co
 
             # --- Phase 3: Embeddings ---
             precomputed_embeddings = None
-            if hasattr(logic, '_HAS_ST') and logic._HAS_ST and logic._st_model is not None:
+            if hasattr(logic, '_HAS_ST') and logic._HAS_ST:
                 try:
-                    st_model = logic._st_model
+                    st_model = logic._get_st_model() # Lazy loading for 'Instant Wake-up'
                     unique_texts = []
                     seen = set()
                     for s in all_submissions:

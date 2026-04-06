@@ -113,45 +113,43 @@ try:
 except ImportError:
     _HAS_DOCX = False
 
-# ── Similarity / ML ───────────────────────────────────────────────────────────
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity as _cos_sim
-    _HAS_SKLEARN = True
-except Exception:
-    _HAS_SKLEARN = False
+# ── Similarity / ML (Lazy Loading for 'Instant Wake-up') ──────────────────────
+_ST_MODEL = None
+_TFIDF    = None
 
-try:
-    from sentence_transformers import SentenceTransformer
-    _HAS_ST = True
-except Exception:
-    _HAS_ST = False
+def _get_st_model():
+    global _ST_MODEL
+    if _ST_MODEL is None:
+        print("[logic] Loading SentenceTransformer (mpnet-base-v2)...")
+        from sentence_transformers import SentenceTransformer
+        _ST_MODEL = SentenceTransformer('all-mpnet-base-v2')
+    return _ST_MODEL
 
-try:
-    from sentence_transformers import CrossEncoder
-    _HAS_CROSS = True
-except Exception:
-    _HAS_CROSS = False
+def _get_tfidf_vectorizer():
+    global _TFIDF
+    if _TFIDF is None:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        _TFIDF = TfidfVectorizer(ngram_range=(1,2), max_features=5000)
+    return _TFIDF
 
-try:
-    import faiss as _faiss
-    _HAS_FAISS = True
-except Exception:
-    _HAS_FAISS = False
+def _lazy_nltk_init():
+    global _HAS_NLTK_READY
+    if '_HAS_NLTK_READY' not in globals() or not _HAS_NLTK_READY:
+        import nltk
+        _HAS_NLTK_READY = True
+        for _pkg in ['punkt', 'punkt_tab', 'stopwords']:
+            try:
+                nltk.data.find(f'tokenizers/{_pkg}' if 'punkt' in _pkg else f'corpora/{_pkg}')
+            except Exception:
+                nltk.download(_pkg, quiet=True)
+        _HAS_NLTK_READY = True
 
-try:
-    import nltk
-    from nltk.tokenize import sent_tokenize as _nltk_sent, word_tokenize as _nltk_word
-    from nltk.stem import PorterStemmer
-    from nltk.corpus import stopwords as _sw
-    for _pkg in ['punkt', 'punkt_tab', 'stopwords']:
-        try:
-            nltk.data.find(f'tokenizers/{_pkg}' if 'punkt' in _pkg else f'corpora/{_pkg}')
-        except LookupError:
-            nltk.download(_pkg, quiet=True)
-    _HAS_NLTK = True
-except Exception:
-    _HAS_NLTK = False
+_HAS_SKLEARN = True
+_HAS_ST = True
+_HAS_CROSS = True
+_HAS_FAISS = True
+_HAS_NLTK = True
+_HAS_RF = True
 
 try:
     from rapidfuzz.fuzz import ratio as _rf_ratio
@@ -1378,20 +1376,19 @@ def warmup_models():
         server is the primary cause of the OOM/SIGTERM that was crashing jobs
       - They load lazily on first individual-file check if actually needed
     """
-    global _st_model, _cross_model
-
-    if _HAS_ST and _st_model is None:
+    if _HAS_ST:
         try:
             print("[warmup] SentenceTransformer…")
-            _st_model = SentenceTransformer("all-mpnet-base-v2")
+            _get_st_model() # Lazy loading for 'Instant Wake-up'
             print("[warmup] SentenceTransformer ready.")
         except Exception as e:
             print(f"[warmup] ST: {e}")
 
-    if _HAS_CROSS and _cross_model is None:
+    if _HAS_CROSS:
         try:
             print("[warmup] CrossEncoder…")
-            _cross_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+            from sentence_transformers import CrossEncoder
+            _cross_model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
             print("[warmup] CrossEncoder ready.")
         except Exception as e:
             print(f"[warmup] CrossEncoder: {e}")
@@ -1673,12 +1670,8 @@ def _bulk_peer_comparison(text, other_submissions, precomputed_embeddings=None):
         stt = _structural_similarity(text[:3000], ot[:3000])
         sty = _stylometric_similarity(text[:1500], ot[:1500])
         
-        # Override: If semantic match is clear (>= 42%), accept regardless of noise in style
-        if sem >= 0.42:
-            fused = sem
-        else:
-            # Standard fusion with 75% weight on semantic meaning
-            fused = round(sem * 0.75 + stt * 0.15 + sty * 0.10, 4)
+        # Balance the score: 55% Semantic (meaning), 30% Structural (exact), 15% Style
+        fused = round(sem * 0.55 + stt * 0.30 + sty * 0.15, 4)
 
         if fused < 0.35:
             continue
