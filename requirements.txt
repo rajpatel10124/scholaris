@@ -184,3 +184,8 @@ zstandard==0.25.0
 gunicorn==20.1.0
 psycopg2-binary==2.9.9
 Flask-Mail==0.10.0
+boto3==1.34.0
+flask-socketio
+eventlet
+langdetect
+googletrans-py

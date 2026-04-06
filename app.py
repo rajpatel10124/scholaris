@@ -35,11 +35,14 @@ import shutil
 import csv
 import io
 import mimetypes
+import boto3
+from botocore.exceptions import ClientError
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from flask import (Flask, render_template, redirect, url_for, request,
                    flash, jsonify, abort, session, Response, send_file, current_app)
+from flask_socketio import SocketIO, emit
 import threading
 from flask_login import (LoginManager, login_user, logout_user,
                          login_required, current_user)
@@ -60,7 +63,26 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB (bulk ZIP uploads)
 
+# Initialize SocketIO for real-time progress tracking
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# ── S3 CONFIG ────────────────────────────────────────────────────────────────
+app.config['S3_BUCKET'] = os.environ.get('S3_BUCKET_NAME')
+app.config['AWS_ACCESS_KEY'] = os.environ.get('AWS_ACCESS_KEY_ID')
+app.config['AWS_SECRET_KEY'] = os.environ.get('AWS_SECRET_ACCESS_KEY')
+app.config['AWS_REGION'] = os.environ.get('AWS_REGION', 'us-east-1')
+
+def get_s3_client():
+    if not app.config['S3_BUCKET']:
+        return None
+    return boto3.client(
+        's3',
+        aws_access_key_id=app.config['AWS_ACCESS_KEY'],
+        aws_secret_access_key=app.config['AWS_SECRET_KEY'],
+        region_name=app.config['AWS_REGION']
+    )
 
 # ── EMAIL CONFIG — set these in environment or replace with real values ───────
 # For Gmail: enable "App Passwords" and use that as MAIL_PASSWORD.
@@ -315,23 +337,43 @@ def _allowed_file(filename: str, allowed_types: list) -> bool:
 
 
 def _save_file(file, user_id: int, assignment_id: int) -> dict:
-    """Save one uploaded file with UUID name. Returns metadata dict."""
+    """Save one uploaded file to S3 (or local fallback). Returns metadata dict."""
     original = file.filename
     ext      = original.rsplit('.', 1)[-1].lower() if '.' in original else 'bin'
     uid_name = f"{uuid.uuid4().hex}.{ext}"
-    folder   = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
-    os.makedirs(folder, exist_ok=True)
-    dest = os.path.join(folder, uid_name)
-    file.save(dest)
+    s3_key   = f"submissions/{user_id}/{assignment_id}/{uid_name}"
+    
     file.seek(0, 2)
     size = file.tell()
     file.seek(0)
+    
+    s3 = get_s3_client()
+    if s3:
+        try:
+            s3.upload_fileobj(file, app.config['S3_BUCKET'], s3_key)
+            return {
+                'name':         uid_name,
+                'originalName': original,
+                'path':         s3_key, # Store S3 Key in the path field
+                'size':         size,
+                'mimetype':     file.content_type or 'application/octet-stream',
+                'storage':      's3'
+            }
+        except Exception as e:
+            print(f"[S3] Upload error: {e}")
+
+    # Local fallback if S3 fails or is not configured
+    folder = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
+    os.makedirs(folder, exist_ok=True)
+    dest = os.path.join(folder, uid_name)
+    file.save(dest)
     return {
         'name':         uid_name,
         'originalName': original,
         'path':         dest,
         'size':         size,
         'mimetype':     file.content_type or 'application/octet-stream',
+        'storage':      'local'
     }
 
 
@@ -1200,12 +1242,32 @@ def submit(assignment_id):
                     'original_filename': orig_name,
                 })
 
+            # S3 Sync before analysis
+            analysis_path = primary_path
+            temp_local_file = None
+            if saved_meta[0].get('storage') == 's3':
+                s3 = get_s3_client()
+                if s3:
+                    ext = primary_path.rsplit('.', 1)[-1].lower() if '.' in primary_path else 'bin'
+                    fd, temp_local_file = tempfile.mkstemp(suffix=f'.{ext}')
+                    os.close(fd)
+                    try:
+                        s3.download_file(app.config['S3_BUCKET'], primary_path, temp_local_file)
+                        analysis_path = temp_local_file
+                    except Exception as s3_err:
+                        print(f"[S3] Download error for analysis: {s3_err}")
+
             result = logic.run_plagiarism_check(
-                file_path=primary_path,
+                file_path=analysis_path,
                 other_submissions=other_texts,
                 threshold=assignment.similarity_threshold,
                 check_handwritten=assignment.check_handwritten,
             )
+            
+            # Clean up temp file
+            if temp_local_file and os.path.exists(temp_local_file):
+                try: os.remove(temp_local_file)
+                except: pass
 
             extracted_text  = result['text']
             file_hash       = result['file_hash']
@@ -1258,7 +1320,7 @@ def submit(assignment_id):
     else:
         # Plagiarism disabled — just extract text for future use
         try:
-            extracted_text, _, file_hash, ocr_confidence = logic.extract_text(
+            extracted_text, _, file_hash, ocr_confidence, forensics = logic.extract_text(
                 primary_path, check_handwritten=assignment.check_handwritten)
         except Exception as exc:
             print(f'[ERROR] Text extraction: {exc}')
@@ -1438,10 +1500,17 @@ def run_bulk_check_task(app, run_id, temp_dir, assignment_id, course_id, current
                         extracted[path] = result
                         bulk_run.processed_count += 1
                         db.session.commit()
+                        # Emit live progress update
+                        socketio.emit('bulk_progress', {
+                            'run_id': run_id,
+                            'processed': bulk_run.processed_count,
+                            'total': len(filtered_paths),
+                            'msg': f'Analyzed {os.path.basename(path)}'
+                        }, room=f'bulk_{run_id}')
                         print(f"   ↳ BG Prog: {bulk_run.processed_count}/{len(filtered_paths)} ({os.path.basename(path)})", flush=True)
                     except Exception as e:
                         print(f"   ↳ [ERROR] BG Extraction: {e}", flush=True)
-                        extracted[p_current] = ("", None, None, 0.0)
+                        extracted[p_current] = ("", None, None, 0.0, {})
                         bulk_run.processed_count += 1
                         db.session.commit()
 
@@ -1471,13 +1540,15 @@ def run_bulk_check_task(app, run_id, temp_dir, assignment_id, course_id, current
 
             local_submissions = []
             for p in filtered_paths:
-                txt, _, fhash, conf = extracted.get(p, ("", None, None, 0.0))
+                # Capture the new 5th forensic value
+                txt, _, fhash, conf, forensics = extracted.get(p, ("", None, None, 0.0, {}))
                 local_submissions.append({
                     'text': txt, 'author_username': os.path.basename(p),
                     'submission_id': None, 'filename': os.path.basename(p),
                     'original_filename': os.path.basename(p),
                     '_unique_id': f'local_{p}', '_path': p,
                     '_file_hash': fhash, '_ocr_confidence': conf,
+                    '_forensics': forensics
                 })
             all_submissions = base_others + local_submissions
 
@@ -1562,6 +1633,8 @@ def run_bulk_check_task(app, run_id, temp_dir, assignment_id, course_id, current
             bulk_run.rejected = sum(1 for r in results if r['verdict'] == 'rejected')
             bulk_run.manual_review = sum(1 for r in results if r['verdict'] == 'manual_review' or r['verdict'] == 'error')
             db.session.commit()
+            # Emit final completion
+            socketio.emit('bulk_complete', {'run_id': run_id}, room=f'bulk_{run_id}')
             print(f"[Bulk-BG] Task #{run_id} finished in {elapsed}s", flush=True)
 
         except Exception as e:
@@ -1587,6 +1660,27 @@ def bulk_check(course_id, assignment_id):
         history = BulkCheckRun.query.filter_by(assignment_id=assignment_id, course_id=course_id).order_by(BulkCheckRun.created_at.desc()).limit(10).all()
         return render_template('bulk_check.html', course=course, assignment=assignment, history=history)
 
+    # ── Handle S3 Direct Upload ──
+    s3_key_direct = request.args.get('s3_key')
+    
+    if s3_key_direct:
+        temp_dir = tempfile.mkdtemp(prefix=f'bulk_{course_id}_{assignment_id}_')
+        try:
+            # File is already in S3 - skip local upload
+            safe_name = s3_key_direct.replace('/','_')
+            with open(os.path.join(temp_dir, safe_name), 'w') as f: f.write(s3_key_direct)
+            
+            # Start background task directly
+            run_id = str(uuid.uuid4())[:8]
+            bulk_run = BulkCheckRun(id=run_id, course_id=course_id, assignment_id=assignment_id, status='pending')
+            db.session.add(bulk_run); db.session.commit()
+            threading.Thread(target=run_bulk_check_task, args=(course_id, assignment_id, temp_dir, run_id)).start()
+            flash('High-speed Cloud Analysis started.', 'success')
+            return redirect(url_for('bulk_check', course_id=course_id, assignment_id=assignment_id))
+        except Exception as e:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            flash(f'Cloud Direct Error: {e}', 'danger'); return redirect(request.url)
+
     upload_zip = request.files.get('zipfile')
     upload_files = request.files.getlist('files')
     if not (upload_zip and upload_zip.filename) and not (upload_files and upload_files[0].filename):
@@ -1594,18 +1688,34 @@ def bulk_check(course_id, assignment_id):
 
     temp_dir = tempfile.mkdtemp(prefix=f'bulk_{course_id}_{assignment_id}_')
     try:
-        # Save ZIP or files to temp_dir
+        # S3 / Instant Start Optimization
+        s3 = get_s3_client()
         if upload_zip and upload_zip.filename:
-            upload_zip.save(os.path.join(temp_dir, secure_filename(upload_zip.filename)))
+            fn = secure_filename(upload_zip.filename)
+            if s3:
+                s3_key = f"bulk/{current_user.id}/{assignment_id}/{fn}"
+                s3.upload_fileobj(upload_zip, app.config['S3_BUCKET'], s3_key)
+                # Pass the S3 Key as if it were a filename in temp_dir
+                # (The background task will detect it's missing locally and pull from S3)
+                with open(os.path.join(temp_dir, s3_key.replace('/','_')), 'w') as f: f.write(s3_key)
+            else:
+                upload_zip.save(os.path.join(temp_dir, fn))
+        
         for fs in upload_files:
             if fs and fs.filename:
-                fs.save(os.path.join(temp_dir, secure_filename(fs.filename)))
+                fn = secure_filename(fs.filename)
+                if s3:
+                    s3_key = f"bulk/{current_user.id}/{assignment_id}/{fn}"
+                    s3.upload_fileobj(fs, app.config['S3_BUCKET'], s3_key)
+                    with open(os.path.join(temp_dir, s3_key.replace('/','_')), 'w') as f: f.write(s3_key)
+                else:
+                    fs.save(os.path.join(temp_dir, fn))
 
         bulk_run = BulkCheckRun(assignment_id=assignment.id, course_id=course_id, run_by=current_user.id,
                                 total_files=0, processed_count=0, status='pending')
         db.session.add(bulk_run); db.session.commit()
 
-        # Start Background Thread (Instant Start)
+        # Start Background Thread
         threading.Thread(target=run_bulk_check_task, args=(current_app._get_current_object(), bulk_run.id, temp_dir, assignment.id, course.id, current_user.id), daemon=True).start()
 
         return redirect(url_for('bulk_status', course_id=course_id, assignment_id=assignment_id, run_id=bulk_run.id))
@@ -1957,6 +2067,39 @@ def download_file(filepath):
         as_attachment=True,
         download_name=filename
     )
+
+
+@app.route('/generate-presigned-url', methods=['POST'])
+@login_required
+def generate_presigned_url():
+    """Generate a pre-signed S3 URL for direct browser-to-S3 upload."""
+    data = request.get_json()
+    filename = data.get('filename')
+    assignment_id = data.get('assignment_id')
+    
+    if not filename or not assignment_id:
+        return jsonify({'error': 'Missing parameters'}), 400
+        
+    s3 = get_s3_client()
+    if not s3:
+        return jsonify({'error': 'S3 not configured'}), 500
+        
+    try:
+        # Key: bulk/<user_id>/<assignment_id>/<filename>
+        s3_key = f"bulk/{current_user.id}/{assignment_id}/{secure_filename(filename)}"
+        
+        presigned_url = s3.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': app.config['S3_BUCKET'],
+                'Key': s3_key,
+                'ContentType': 'application/zip'
+            },
+            ExpiresIn=3600  # 1 hour
+        )
+        return jsonify({'url': presigned_url, 'key': s3_key})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # =============================================================================
