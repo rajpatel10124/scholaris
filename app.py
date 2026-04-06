@@ -22,6 +22,10 @@ import os
 import secrets
 import random
 import smtplib
+from dotenv import load_dotenv
+
+# Load .env file explicitly
+load_dotenv()
 import zipfile
 import shutil
 import csv
@@ -45,8 +49,8 @@ import logic
 # APP SETUP
 # ─────────────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-key-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///scholaris.db'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///scholaris.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1 GB (bulk ZIP uploads)
