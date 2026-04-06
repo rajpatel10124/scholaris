@@ -6,15 +6,13 @@ services:
 
   # ── Flask / Gunicorn application ──────────────────────────────────────────
   web:
-    build: .
+    image: rajpatel1202/scholaris:latest
     restart: unless-stopped
     ports:
       - "5000:5000"
     env_file:
       - .env
     environment:
-      # Bypass the model hoster connectivity check to speed up startup
-      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
       # Override DATABASE_URL to point to the postgres service below
       DATABASE_URL: postgresql://scholaris:${POSTGRES_PASSWORD}@db:5432/scholaris
     volumes:

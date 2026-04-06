@@ -1,6 +1,4 @@
-import os
-os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
-
+  
 """
 logic.py — Plagiarism Detection Engine
 =======================================
@@ -43,7 +41,7 @@ from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 # ── Tesseract (baseline, always try first) ────────────────────────────────────
 try:
     import pytesseract
-    # Version check is now lazy-loaded to prevent startup lag
+    pytesseract.get_tesseract_version()
     _HAS_TESS = True
 except Exception:
     _HAS_TESS = False
@@ -107,26 +105,6 @@ except Exception:
         _HAS_PYPDF = True
     except Exception:
         _HAS_PYPDF = False
-
-# ── Phase 3: Smart AI Modules (AST & Translation) ─────────────────────────────
-try:
-    import ast as _ast
-    _HAS_AST = True
-except:
-    _HAS_AST = False
-
-try:
-    from langdetect import detect as _detect_lang
-    _HAS_LANGDETECT = True
-except:
-    _HAS_LANGDETECT = False
-
-try:
-    from googletrans import Translator as _Translator
-    _HAS_GOOGLETRANS = True
-    _translator = _Translator()
-except:
-    _HAS_GOOGLETRANS = False
 
 # ── Word documents ────────────────────────────────────────────────────────────
 try:
@@ -207,81 +185,10 @@ def clean_text(text: str) -> str:
     if not text:
         return ""
     text = text.lower()
-    # Initial normalization
     text = re.sub(r"\n+", " ", text)
     text = re.sub(r"\s+", " ", text)
-    # Remove hidden/ghost text candidates (simplified for base cleaning)
-    text = re.sub(r"[^a-z0-9.,!?;:\- ]", " ", text)
+    text = re.sub(r"[^a-z0-9.,!?;: ]", " ", text)
     return text.strip()
-
-def detect_hidden_text(text: str) -> dict:
-    """Detect zero-width characters and hidden trickery."""
-    hidden_patterns = {
-        'zero_width_space': r'\u200b',
-        'zero_width_non_joiner': r'\u200c',
-        'zero_width_joiner': r'\u200d',
-        'left_to_right_mark': r'\u200e',
-        'right_to_left_mark': r'\u200f',
-        'replacement_character': r'\ufffd',
-    }
-    found = {}
-    for name, pattern in hidden_patterns.items():
-        count = len(re.findall(pattern, text))
-        if count > 0:
-            found[name] = count
-    return {
-        'has_hidden': len(found) > 0,
-        'details': found,
-        'warning': "Hidden characters detected (potential plagiarism bypass attempt)" if found else None
-    }
-
-def strip_references(text: str) -> str:
-    """Detect and remove Bibliography/References section to avoid false positives."""
-    # Look for common headers near the end (last 30% of doc)
-    split_patterns = [
-        r'\n\s*(?:references|bibliography|works cited)\s*\n',
-        r'[\r\n]{2,}\s*(?:references|bibliography|works cited)\s*[\r\n]'
-    ]
-    lines = text.split('\n')
-    # If the doc is short, don't strip
-    if len(lines) < 20: return text
-    
-    # Check the last 1/3rd of the document for the header
-    start_search = int(len(text) * 0.7)
-    search_area = text[start_search:].lower()
-    
-    found_idx = -1
-    for p in split_patterns:
-        match = re.search(p, search_area, re.IGNORECASE)
-        if match:
-            found_idx = start_search + match.start()
-            break
-            
-    if found_idx != -1:
-        return text[:found_idx].strip()
-    return text
-
-def extract_doc_metadata(file_path: str) -> dict:
-    """Forensic analysis of Author/Creator/Metadata."""
-    meta = {'author': None, 'creator': None, 'created': None, 'software': None}
-    name = file_path.lower()
-    try:
-        if name.endswith('.pdf') and _HAS_PYPDF:
-            reader = _PdfReader(file_path)
-            m = reader.metadata or {}
-            meta['author'] = m.get('/Author')
-            meta['creator'] = m.get('/Creator')
-            meta['created'] = str(m.get('/CreationDate'))
-            meta['software'] = m.get('/Producer')
-        elif name.endswith('.docx') and _HAS_DOCX:
-            doc = _DocxDoc(file_path)
-            p = doc.core_properties
-            meta['author'] = p.author
-            meta['created'] = str(p.created)
-            meta['software'] = p.last_modified_by
-    except Exception as e:
-        print(f"[Forensics] Metadata error: {e}")
-    return meta
 
 
 def generate_hash(content: bytes) -> str:
@@ -1103,60 +1010,11 @@ def _extract_image_text(path: str, check_handwritten: bool = True) -> tuple:
     return clean_text(text), conf
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 3: SMART AI — AST & TRANSLATION ENGINE
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _canonicalize_python_ast(source_code: str) -> str:
-    """Uses Python AST to normalize code, detecting structural logic-plagiarism."""
-    if not _HAS_AST or not source_code.strip(): return source_code
-    try:
-        tree = _ast.parse(source_code)
-        class Normalizer(_ast.NodeTransformer):
-            def __init__(self):
-                self.var_map = {}
-                self.counter = 0
-            def visit_Name(self, node):
-                if node.id not in self.var_map:
-                    self.counter += 1; self.var_map[node.id] = f"var_{self.counter}"
-                node.id = self.var_map[node.id]
-                return self.generic_visit(node)
-            def visit_FunctionDef(self, node):
-                self.counter += 1; node.name = f"func_{self.counter}"
-                return self.generic_visit(node)
-            def visit_Expr(self, node):
-                if isinstance(node.value, (_ast.Str, _ast.Constant)): return None
-                return self.generic_visit(node)
-        tree = Normalizer().visit(tree)
-        return _ast.unparse(tree) if hasattr(_ast, 'unparse') else source_code
-    except: return source_code
-
-def _detect_and_translate_to_eng(text: str) -> tuple:
-    """Identifies language and translates if not English for deeper semantic check."""
-    if not _HAS_LANGDETECT or not text.strip(): return text, 'en', False
-    try:
-        lang = _detect_lang(text)
-        if lang != 'en':
-            if _HAS_GOOGLETRANS:
-                try:
-                    res = _translator.translate(text, dest='en')
-                    return res.text, lang, True
-                except: pass
-            return text, lang, False
-        return text, 'en', False
-    except: return text, 'en', False
-
-
 def extract_text(file_path: str, check_handwritten: bool = True) -> tuple:
     """
-    Universal text extractor with Forensic Integrity checks.
-    Returns (text, binary_content, file_hash, ocr_confidence, forensics).
+    Universal text extractor. Handles txt, pdf, images, docx.
+    Returns (text, binary_content, file_hash, ocr_confidence). Never raises.
     """
-    forensics = {
-        'metadata': extract_doc_metadata(file_path),
-        'hidden_text': {'has_hidden': False, 'details': {}, 'warning': None},
-        'references_stripped': False
-    }
     if not os.path.exists(file_path):
         print(f"[extract_text] Not found: {file_path}")
         return "", None, None, 0.0
@@ -1207,42 +1065,18 @@ def extract_text(file_path: str, check_handwritten: bool = True) -> tuple:
     except Exception as e:
         print(f"[extract_text] {file_path}: {e}")
 
-    # Post-extraction Integrity Analysis
-    forensics['hidden_text'] = detect_hidden_text(text)
-    
-    # Strip references for the AI comparison but keep full text for binary
-    original_text_len = len(text)
-    text = strip_references(text)
-    forensics['references_stripped'] = len(text) < original_text_len
-
     print(f"[extract_text] '{os.path.basename(file_path)}' → "
-          f"{len(text.split())} words, conf={round(conf,1)}%, "
-          f"ghost_text={forensics['hidden_text']['has_hidden']}")
-          
-    # Final Smart-AI Layer (Phase 3)
-    text, lang_id, was_translated = _detect_and_translate_to_eng(text)
-    forensics['original_language'] = lang_id
-    forensics['was_translated']    = was_translated
-    
-    # If file looks like Python or is a .py file, apply AST canonicalizer
-    if file_path.lower().endswith('.py') or ('def ' in text and 'import ' in text):
-        forensics['ast_normalized_text'] = _canonicalize_python_ast(text)
-        forensics['is_programming_code'] = True
-
-    return text, content, file_hash, conf, forensics
+          f"{len(text.split())} words, conf={round(conf,1)}%")
+    return text, content, file_hash, conf
 
 
 
 def extract_text_bulk(file_path: str) -> tuple:
     """
-    Bulk-safe text extractor with Forensic Integrity checks.
-    Returns (text, binary_content, file_hash, ocr_confidence, forensics).
+    Bulk-safe text extractor — never loads heavy OCR engines (EasyOCR/PaddleOCR).
+    Uses Tesseract only for scanned PDFs, at low DPI with a page cap.
+    Returns (text, binary_content, file_hash, ocr_confidence). Never raises.
     """
-    forensics = {
-        'metadata': extract_doc_metadata(file_path),
-        'hidden_text': {'has_hidden': False, 'details': {}, 'warning': None},
-        'references_stripped': False
-    }
     if not os.path.exists(file_path):
         print(f"[extract_text_bulk] Not found: {file_path}")
         return "", None, None, 0.0
@@ -1326,29 +1160,9 @@ def extract_text_bulk(file_path: str) -> tuple:
     except Exception as e:
         print(f"[extract_text_bulk] {file_path}: {e}")
 
-    # Post-extraction Integrity Analysis
-    forensics['hidden_text'] = detect_hidden_text(text)
-    
-    # Strip references for the AI comparison but keep full text for binary
-    original_text_len = len(text)
-    text = strip_references(text)
-    forensics['references_stripped'] = len(text) < original_text_len
-
     print(f"[extract_text_bulk] '{os.path.basename(file_path)}' → "
-          f"{len(text.split())} words, conf={round(conf,1)}%, "
-          f"ghost_text={forensics['hidden_text']['has_hidden']}")
-          
-    # Final Smart-AI Layer (Phase 3)
-    text, lang_id, was_translated = _detect_and_translate_to_eng(text)
-    forensics['original_language'] = lang_id
-    forensics['was_translated']    = was_translated
-    
-    # If file looks like Python or is a .py file, apply AST canonicalizer
-    if file_path.lower().endswith('.py') or ('def ' in text and 'import ' in text):
-        forensics['ast_normalized_text'] = _canonicalize_python_ast(text)
-        forensics['is_programming_code'] = True
-
-    return text, content, file_hash, conf, forensics
+          f"{len(text.split())} words, conf={round(conf,1)}%")
+    return text, content, file_hash, conf
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1598,10 +1412,9 @@ def _cross_encoder_score(text1: str, text2: str) -> float:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def peer_comparison(text: str, other_texts: list,
-                    ocr_confidence: float = 100.0,
+                    ocr_confidence: float = 100,
                     precomputed_embeddings: dict = None,
-                    skip_cross_encoder: bool = False,
-                    curr_forensics: dict = None) -> dict:
+                    skip_cross_encoder: bool = False) -> dict:
     best = {
         "peer_score": 0.0, "matched_author": None,
         "matched_submission_id": None, "matched_filename": None,
@@ -1620,33 +1433,22 @@ def peer_comparison(text: str, other_texts: list,
 
     for other in other_texts:
         ot = other.get("text", "")
-        if not ot or len(ot.split()) < 5: # Lowered for code
+        if not ot or len(ot.split()) < 10:
             continue
 
-        # AST Logic Handshake (Phase 3)
-        final_t1, final_t2 = text, ot
-        if curr_forensics and curr_forensics.get('is_programming_code'):
-            o_f = other.get('forensics', {})
-            if o_f and o_f.get('is_programming_code'):
-                final_t1 = curr_forensics.get('ast_normalized_text') or text
-                final_t2 = o_f.get('ast_normalized_text') or ot
-
-        if curr_emb is not None and precomputed_embeddings and not curr_forensics.get('is_programming_code'):
+        if curr_emb is not None and precomputed_embeddings:
             oc = clean_text(ot)
             oe = precomputed_embeddings.get(oc)
             if oe is not None and float(np.dot(curr_emb, oe)) < 0.45:
                 continue
 
-        # Use final_t1/final_t2 (could be AST-normalized) for actual comparison
-        other_chunks = split_into_chunks(final_t2)
-        base_chunks_to_use = split_into_chunks(final_t1)
-        
+        other_chunks = split_into_chunks(ot)
         chunk_scores = []
         best_local   = 0
         best_pair    = ("", "")
         best_sem = best_stt = best_sty = 0.0
 
-        for c1 in base_chunks_to_use:
+        for c1 in base_chunks:
             if len(c1.split()) < 20: continue
             max_cs, best_c2 = 0, ""
             _s = _t = _y = 0.0
@@ -1787,7 +1589,7 @@ def run_plagiarism_check(file_path: str, other_submissions: list,
         (".png",".jpg",".jpeg",".tiff",".tif",".gif",".webp",".bmp"))
     is_pdf   = file_path.lower().endswith(".pdf")
 
-    text, content, file_hash, ocr_confidence, forensics = extract_text(
+    text, content, file_hash, ocr_confidence = extract_text(
         file_path, check_handwritten=check_handwritten)
 
     result = {
@@ -1796,7 +1598,6 @@ def run_plagiarism_check(file_path: str, other_submissions: list,
         "peer_details": {},
         "external_details": {"overall_external_score": 0, "sources": []},
         "analysis_text": "", "is_exact_duplicate": False, "reason": "Original Work",
-        "forensics": forensics
     }
 
     ocr_was_used = is_image or (is_pdf and ocr_confidence < 99.0)
@@ -1814,8 +1615,7 @@ def run_plagiarism_check(file_path: str, other_submissions: list,
 
     peer       = peer_comparison(text, other_submissions, ocr_confidence,
                                  precomputed_embeddings=precomputed_embeddings,
-                                 skip_cross_encoder=skip_cross_encoder,
-                                 curr_forensics=forensics)
+                                 skip_cross_encoder=skip_cross_encoder)
     peer_score = peer["peer_score"]
     result["peer_score"]   = peer_score
     result["peer_details"] = peer
@@ -1841,11 +1641,6 @@ def run_plagiarism_check(file_path: str, other_submissions: list,
 
 
 def _bulk_peer_comparison(text, other_submissions, precomputed_embeddings=None):
-    """
-    Optimized bulk comparison using FAISS vector search where available.
-    Falls back to linear/tfidf for cases without precomputed embeddings.
-    Integrates Section 3 AST/Translation Logic.
-    """
     best = {
         'peer_score': 0.0, 'matched_author': None,
         'matched_submission_id': None, 'matched_filename': None,
@@ -1855,93 +1650,49 @@ def _bulk_peer_comparison(text, other_submissions, precomputed_embeddings=None):
     }
     if not other_submissions or not text:
         return best
-
     curr_cl  = clean_text(text)
     curr_emb = (precomputed_embeddings or {}).get(curr_cl)
     all_matches = []
-
-    # ── Phase 1: High-Speed FAISS Vector Search ──────────────────────────────
-    # If we have embeddings, use FAISS for O(log n) candidate selection
-    candidates = other_submissions
-    if curr_emb is not None and precomputed_embeddings and _HAS_FAISS:
-        try:
-            import faiss
-            # Normalize for cosine similarity
-            curr_v = np.array([curr_emb]).astype('float32')
-            faiss.normalize_L2(curr_v)
-
-            # Build index
-            dim = len(curr_emb)
-            index = faiss.IndexFlatIP(dim)
-            
-            emb_list = []
-            id_map = []
-            for i, other in enumerate(other_submissions):
-                oc = clean_text(other.get('text', ''))
-                oe = precomputed_embeddings.get(oc)
-                if oe is not None:
-                    v = np.array(oe).astype('float32')
-                    faiss.normalize_L2(v)
-                    emb_list.append(v)
-                    id_map.append(i)
-            
-            if emb_list:
-                index.add(np.vstack(emb_list))
-                # Search for top matches
-                k = min(15, len(emb_list))
-                D, I = index.search(curr_v, k)
-                
-                # Filter candidates to only high semantic matches
-                candidates = []
-                for score, idx in zip(D[0], I[0]):
-                    if score > 0.45: # Pre-filter threshold
-                        candidates.append(other_submissions[id_map[idx]])
-        except Exception as e:
-            print(f"[FAISS] Search error: {e}")
-
-    # ── Phase 2: Refined Linear Scoring ──────────────────────────────────────
-    for other in candidates:
+    for other in other_submissions:
         ot = other.get('text', '')
         if not ot or len(ot.split()) < 10:
             continue
         oc = clean_text(ot)
-        
-        # Calculate semantic similarity
+        sem = 0.0 # Safety initialization
         if curr_emb is not None and precomputed_embeddings is not None:
             oe = precomputed_embeddings.get(oc)
             sem = float(np.dot(curr_emb, oe)) if oe is not None else _tfidf_similarity(curr_cl, oc)
         else:
             sem = _tfidf_similarity(curr_cl, oc)
 
+        # For noisy OCR/Handwriting, structural/stylometric signals are often zero.
+        # We prioritize the Semantic (meaning) signal if it is high enough.
         stt = _structural_similarity(text[:3000], ot[:3000])
         sty = _stylometric_similarity(text[:1500], ot[:1500])
         
-        # Blend: 45% Semantic, 40% Structural, 15% Style
+        # Blend: 45% Semantic (meaning), 40% Structural (exact), 15% Style
+        # Re-introducing more structural weight for 'natural' score feeling
         fused = round(sem * 0.45 + stt * 0.40 + sty * 0.15, 4)
 
         if fused < 0.35:
             continue
-            
-        match_data = {
+        all_matches.append({
             'author': other.get('author_username', 'Unknown'),
             'submission_id': other.get('submission_id'),
             'filename': other.get('filename', ''),
             'original_filename': other.get('original_filename', ''),
             'fused_score': round(fused * 100, 1),
             'top_passages': [],
-        }
-        all_matches.append(match_data)
-        
+        })
         if fused > best['peer_score']:
             best.update({
                 'peer_score': fused,
-                'matched_author': match_data['author'],
-                'matched_submission_id': match_data['submission_id'],
-                'matched_filename': match_data['filename'],
+                'matched_author': other.get('author_username'),
+                'matched_submission_id': other.get('submission_id'),
+                'matched_filename': other.get('filename', ''),
                 'semantic_score': sem, 'structural_score': stt,
                 'stylometric_score': sty, 'top_matched_passages': [],
             })
-
     all_matches.sort(key=lambda x: x['fused_score'], reverse=True)
     best['all_matches'] = all_matches
     return best

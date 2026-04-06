@@ -7,7 +7,7 @@
             <div class="card shadow-lg border-0 rounded-lg">
                 <div class="card-header bg-primary text-white text-center py-4">
                     <h2 class="mb-0">
-                        <i id="statusIcon" class="fas fa-spinner fa-spin mr-2"></i>
+                        <i class="fas fa-spinner fa-spin mr-2"></i>
                         Bulk Plagiarism Scan in Progress
                     </h2>
                 </div>
@@ -19,14 +19,18 @@
                         </p>
                     </div>
 
+                    {% set total = run.total_files | default(0) %}
+                    {% set processed = run.processed_count | default(0) %}
+                    {% set percentage = ((processed / total) * 100) | round | int if total > 0 else 0 %}
+                    
                     <div class="progress mb-4" style="height: 35px; border-radius: 20px; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
-                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
                              role="progressbar" 
-                             style="width: 0%; font-weight: bold; font-size: 1.1rem;" 
-                             aria-valuenow="0" 
+                             style="width: {{ percentage }}%; font-weight: bold; font-size: 1.1rem;" 
+                             aria-valuenow="{{ percentage }}" 
                              aria-valuemin="0" 
                              aria-valuemax="100">
-                            0%
+                            {{ percentage }}%
                         </div>
                     </div>
 
@@ -34,37 +38,28 @@
                         <div class="d-flex justify-content-between mb-3 px-2">
                             <span class="badge badge-pill badge-info py-2 px-3">
                                 <i class="fas fa-file-alt mr-1"></i>
-                                Processed: <span id="processedCount">0</span> / {{ run.total_files }}
+                                Processed: {{ run.processed_count }} / {{ run.total_files }}
                             </span>
-                            <span id="statusBadge" class="badge badge-pill badge-warning py-2 px-3">
+                            <span class="badge badge-pill badge-warning py-2 px-3">
                                 <i class="fas fa-clock mr-1"></i>
                                 Status: {{ (run.status or 'pending')|capitalize }}
                             </span>
                         </div>
 
-                        <div id="completionNotice" class="alert alert-success border text-center p-4 rounded-lg" style="display:none;">
-                            <h5><i class="fas fa-check-circle mr-2"></i>Scan Complete!</h5>
-                            <p class="mb-0">All files have been processed. You can now view the forensic reports.</p>
-                            <a href="{{ url_for('bulk_check_run', course_id=course.id, assignment_id=assignment.id, run_id=run.id) }}" class="btn btn-success mt-3">
-                                View Results
-                            </a>
-                        </div>
-
-                        <div id="infoBox" class="alert alert-light border text-left p-4 rounded-lg" style="background: #f8f9fa;">
+                        <div class="alert alert-light border text-left p-4 rounded-lg" style="background: #f8f9fa;">
                             <h5><i class="fas fa-info-circle mr-2 text-primary"></i>What's happening?</h5>
                             <ul class="mb-0 text-muted">
                                 <li>The system is performing AI-powered OCR on each student submission.</li>
                                 <li>We are checking for both internal peer-to-peer and external plagiarism.</li>
                                 <li><strong>You can safely leave this page.</strong> The scan will continue in the background.</li>
+                                <li>The results will be available in the "Reports" section when complete.</li>
                             </ul>
                         </div>
                     </div>
                 </div>
                 <div class="card-footer bg-white text-center py-4">
-                    <div id="footerStatus">
-                        <div class="spinner-grow text-primary spinner-grow-sm" role="status"></div>
-                        <span class="text-muted ml-2">Live updates active...</span>
-                    </div>
+                    <div class="spinner-grow text-primary spinner-grow-sm" role="status"></div>
+                    <span class="text-muted ml-2">Automatically refreshing every 5 seconds...</span>
                 </div>
             </div>
         </div>
@@ -72,62 +67,18 @@
 </div>
 
 <script>
-    const runId = {{ run.id }};
-    const totalFiles = {{ run.total_files }};
-    
-    function updateProgress() {
-        console.log("Polling bulk status for run:", runId);
-        fetch(`/api/bulk_status/${runId}`)
-            .then(response => response.json())
-            .then(data => {
-                const pct = data.percentage;
-                
-                // Update Progress Bar
-                const bar = document.getElementById('progressBar');
-                bar.style.width = pct + '%';
-                bar.innerText = pct + '%';
-                bar.setAttribute('aria-valuenow', pct);
-                
-                // Update Counts
-                document.getElementById('processedCount').innerText = data.processed_count;
-                
-                // Update Status Badge
-                const badge = document.getElementById('statusBadge');
-                badge.innerText = 'Status: ' + data.status.charAt(0).toUpperCase() + data.status.slice(1);
-                
-                if (data.status === 'completed') {
-                    badge.className = 'badge badge-pill badge-success py-2 px-3';
-                    document.getElementById('statusIcon').className = 'fas fa-check-circle mr-2';
-                    document.getElementById('statusIcon').classList.remove('fa-spin');
-                    document.getElementById('completionNotice').style.display = 'block';
-                    document.getElementById('infoBox').style.display = 'none';
-                    document.getElementById('footerStatus').innerHTML = '<span class="text-success fw-bold">Scan Complete.</span>';
-                    return; // Stop polling
-                }
-                
-                if (data.status === 'error') {
-                    badge.className = 'badge badge-pill badge-danger py-2 px-3';
-                    document.getElementById('footerStatus').innerText = 'An error occurred during scanning.';
-                    return; // Stop polling
-                }
-                
-                // Continue polling every 2 seconds
-                setTimeout(updateProgress, 2000);
-            })
-            .catch(err => {
-                console.error("Progress fetch error:", err);
-                // Graceful fallback to 5 second retry on network glitch
-                setTimeout(updateProgress, 5000);
-            });
-    }
-    
-    // Initial call
-    document.addEventListener('DOMContentLoaded', updateProgress);
+    // Auto-refresh every 5 seconds until complete
+    setTimeout(function() {
+        window.location.reload();
+    }, 5000);
 </script>
 
 <style>
     .card {
         transition: transform 0.3s ease;
+    }
+    .background-scanning {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
 </style>
 {% endblock %}
