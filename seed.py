@@ -1,24 +1,38 @@
-import sqlite3
-from werkzeug.security import generate_password_hash
+import os
+from app import app
+from models import db, User
+from flask_bcrypt import Bcrypt
 
-DB_NAME = "scholaris.db"
+# Initialize Bcrypt for hashing
+bcrypt = Bcrypt(app)
 
-password_plain = "H@rsh3828"
-password_hash = generate_password_hash(password_plain)
+def seed_database():
+    with app.app_context():
+        print("Creating tables if they don't exist in the current database...")
+        db.create_all()
 
-conn = sqlite3.connect(DB_NAME)
-cursor = conn.cursor()
+        # Seed dummy students
+        password_plain = "H@rsh3828"
+        password_hash = bcrypt.generate_password_hash(password_plain).decode('utf-8')
 
-for i in range(1, 51):
-    username = f"{i:02d}"   # 01,02,...50
-    email = f"student{i:02d}@test.com"
+        print("Seeding 50 dummy students...")
+        for i in range(1, 51):
+            username = f"std{i:02d}"
+            email = f"student{i:02d}@test.com"
+            
+            # Check if user already exists
+            if not User.query.filter_by(username=username).first():
+                user = User(
+                    username=username,
+                    email=email,
+                    password=password_hash,
+                    role='student',
+                    email_verified=True
+                )
+                db.session.add(user)
+        
+        db.session.commit()
+        print("✅ Database initialized and 50 students seeded successfully.")
 
-    cursor.execute("""
-        INSERT INTO users (username, email, password, role, is_verified)
-        VALUES (?, ?, ?, 'student', 1)
-    """, (username, email, password_hash))
-
-conn.commit()
-conn.close()
-
-print("50 dummy students inserted successfully.")
+if __name__ == "__main__":
+    seed_database()
