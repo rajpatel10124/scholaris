@@ -187,7 +187,10 @@ class BulkCheckRun(db.Model):
     run_by        = db.Column(db.Integer, db.ForeignKey('user.id'),       nullable=False)
 
     # Summary
-    total_files   = db.Column(db.Integer, default=0)
+    total_files     = db.Column(db.Integer, default=0)
+    processed_count = db.Column(db.Integer, default=0)
+    status          = db.Column(db.String(20), default='pending') # pending|processing|completed|error
+    
     accepted      = db.Column(db.Integer, default=0)
     rejected      = db.Column(db.Integer, default=0)
     manual_review = db.Column(db.Integer, default=0)

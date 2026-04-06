@@ -1347,338 +1347,244 @@ def view_reports(course_id):
                            pending_review=pending)
 
 
+
 # =============================================================================
-# FACULTY BULK PLAGIARISM CHECK (zip/folder)
+# FACULTY BULK PLAGIARISM CHECK (BACKGROUND TASK)
 # =============================================================================
+def run_bulk_check_task(app, run_id, temp_dir, filtered_paths, assignment_id, course_id, current_user_id):
+    """Background task to run bulk plagiarism check."""
+    print(f"[Bulk-BG] Task #{run_id} starting for {len(filtered_paths)} files...", flush=True)
+    with app.app_context():
+        t0 = time.time()
+        try:
+            bulk_run = BulkCheckRun.query.get(run_id)
+            if not bulk_run: return
+            bulk_run.status = 'processing'
+            db.session.commit()
+
+            assignment = Assignment.query.get(assignment_id)
+
+            # --- Phase 1: Text extraction ---
+            extracted = {}
+            def _extract_one(p):
+                return p, logic.extract_text_bulk(p)
+
+            _workers = min(2, len(filtered_paths))
+            with ThreadPoolExecutor(max_workers=_workers) as pool:
+                futures = {pool.submit(_extract_one, p): p for p in filtered_paths}
+                for fut in as_completed(futures):
+                    p_current = futures[fut]
+                    try:
+                        path, result = fut.result()
+                        extracted[path] = result
+                        bulk_run.processed_count += 1
+                        db.session.commit()
+                        print(f"   ↳ BG Prog: {bulk_run.processed_count}/{len(filtered_paths)} ({os.path.basename(path)})", flush=True)
+                    except Exception as e:
+                        print(f"   ↳ [ERROR] BG Extraction: {e}", flush=True)
+                        extracted[p_current] = ("", None, None, 0.0)
+                        bulk_run.processed_count += 1
+                        db.session.commit()
+
+            # --- Phase 2: Build submission lists ---
+            base_others = []
+            db_submissions = Submission.query.filter(
+                Submission.course_id == course_id,
+                Submission.assignment_id == assignment_id,
+                Submission.status == 'accepted'
+            ).all()
+            for sub in db_submissions:
+                if not sub.text_content: continue
+                orig_name = sub.filename or ''
+                try:
+                    m = json.loads(sub.files_metadata or '[]')
+                    if isinstance(m, list) and m:
+                        orig_name = m[0].get('originalName', orig_name)
+                except Exception: pass
+                base_others.append({
+                    'text': sub.text_content,
+                    'author_username': sub.author.username if sub.author else 'Unknown',
+                    'submission_id': sub.id,
+                    'filename': sub.filename or '',
+                    'original_filename': orig_name,
+                    '_unique_id': f'db_{sub.id}',
+                })
+
+            local_submissions = []
+            for p in filtered_paths:
+                txt, _, fhash, conf = extracted.get(p, ("", None, None, 0.0))
+                local_submissions.append({
+                    'text': txt, 'author_username': os.path.basename(p),
+                    'submission_id': None, 'filename': os.path.basename(p),
+                    'original_filename': os.path.basename(p),
+                    '_unique_id': f'local_{p}', '_path': p,
+                    '_file_hash': fhash, '_ocr_confidence': conf,
+                })
+            all_submissions = base_others + local_submissions
+
+            # --- Phase 3: Embeddings ---
+            precomputed_embeddings = None
+            if hasattr(logic, '_HAS_ST') and logic._HAS_ST and logic._st_model is not None:
+                try:
+                    st_model = logic._st_model
+                    unique_texts = []
+                    seen = set()
+                    for s in all_submissions:
+                        text = s.get('text')
+                        if not text: continue
+                        cl = logic.clean_text(text)
+                        if cl and cl not in seen:
+                            seen.add(cl); unique_texts.append(cl)
+                    if unique_texts:
+                        embeddings = st_model.encode(unique_texts, batch_size=16, convert_to_numpy=True).astype("float32")
+                        if hasattr(logic, '_HAS_FAISS') and logic._HAS_FAISS:
+                            import faiss as _faiss
+                            _faiss.normalize_L2(embeddings)
+                        else:
+                            import numpy as np
+                            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+                            embeddings = embeddings / np.maximum(norms, 1e-10)
+                        precomputed_embeddings = {t: emb for t, emb in zip(unique_texts, embeddings)}
+                except Exception as e:
+                    print(f"[Bulk-BG] Embedding error: {e}", flush=True)
+
+            # --- Phase 4: Plagiarism checks ---
+            results = []
+            _threshold = assignment.similarity_threshold
+            for lsub in local_submissions:
+                try:
+                    _path, _txt, _hash, _conf, _uid = lsub['_path'], lsub['text'], lsub['_file_hash'], lsub['_ocr_confidence'], lsub['_unique_id']
+                    _others = [s for s in all_submissions if s['_unique_id'] != _uid]
+                    _rep = logic.bulk_run_plagiarism_check_preextracted(
+                        text=_txt, file_hash=_hash, ocr_confidence=_conf or 100.0,
+                        other_submissions=_others, threshold=_threshold,
+                        precomputed_embeddings=precomputed_embeddings, filename=os.path.basename(_path),
+                    )
+                    if _hash:
+                        for s in _others:
+                            oh = s.get('_file_hash') or s.get('content_hash')
+                            if oh and oh == _hash:
+                                _rep['verdict'] = 'rejected'
+                                _rep['reason']  = f"Exact duplicate of {s['author_username']}"
+                                _rep['peer_score'] = 1.0; _rep['is_exact_duplicate'] = True
+                                break
+                    results.append({
+                        'filename': os.path.relpath(_path, temp_dir),
+                        'verdict': _rep.get('verdict', 'unknown'),
+                        'reason': _rep.get('reason', ''),
+                        'peer_score': round(_rep.get('peer_score', 0.0) * 100, 1),
+                        'external_score': _rep.get('external_score', 0.0),
+                        'ocr_confidence': _rep.get('ocr_confidence', 0.0),
+                        'analysis_text': _rep.get('analysis_text', ''),
+                        'peer_details': _rep.get('peer_details', {}),
+                    })
+                except Exception as e:
+                    results.append({
+                        'filename': os.path.basename(lsub.get('_path', '')),
+                        'verdict': 'error', 'reason': str(e),
+                        'peer_score': 0.0, 'external_score': 0.0, 'ocr_confidence': 0.0,
+                        'analysis_text': '', 'peer_details': {},
+                    })
+
+            # --- Phase 5: Finalize ---
+            elapsed = round(time.time() - t0, 1)
+            for row in results:
+                db.session.add(BulkCheckResult(
+                    run_id=run_id, filename=row['filename'],
+                    verdict=row['verdict'], reason=str(row['reason'])[:255],
+                    peer_score=row['peer_score'], external_score=row['external_score'],
+                    ocr_confidence=row['ocr_confidence'], analysis_text=row['analysis_text'],
+                    peer_details=json.dumps(row['peer_details']),
+                ))
+            
+            bulk_run.status = 'completed'
+            bulk_run.elapsed_sec = elapsed
+            bulk_run.accepted = sum(1 for r in results if r['verdict'] == 'accepted')
+            bulk_run.rejected = sum(1 for r in results if r['verdict'] == 'rejected')
+            bulk_run.manual_review = sum(1 for r in results if r['verdict'] == 'manual_review' or r['verdict'] == 'error')
+            db.session.commit()
+            print(f"[Bulk-BG] Task #{run_id} finished in {elapsed}s", flush=True)
+
+        except Exception as e:
+            db.session.rollback()
+            try:
+                br = BulkCheckRun.query.get(run_id)
+                if br: br.status = 'error'; db.session.commit()
+            except: pass
+            print(f"[Bulk-BG] Task #{run_id} failed: {e}", flush=True)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 @app.route('/course/<int:course_id>/assignment/<int:assignment_id>/bulk_check', methods=['GET', 'POST'])
 @login_required
 def bulk_check(course_id, assignment_id):
-    if current_user.role != 'faculty':
-        abort(403)
-
+    if current_user.role != 'faculty': abort(403)
     course = db.get_or_404(Course, course_id)
     assignment = db.get_or_404(Assignment, assignment_id)
-    if assignment.course_id != course.id:
-        abort(404)
+    if assignment.course_id != course.id: abort(404)
 
     if request.method == 'GET':
-        return render_template('bulk_check.html', course=course, assignment=assignment,
-                               history=BulkCheckRun.query.filter_by(
-                                   assignment_id=assignment_id, course_id=course_id
-                               ).order_by(BulkCheckRun.created_at.desc()).limit(10).all())
-
-    import time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    t0 = time.time()
+        history = BulkCheckRun.query.filter_by(assignment_id=assignment_id, course_id=course_id).order_by(BulkCheckRun.created_at.desc()).limit(10).all()
+        return render_template('bulk_check.html', course=course, assignment=assignment, history=history)
 
     upload_zip = request.files.get('zipfile')
     upload_files = request.files.getlist('files')
+    if not (upload_zip and upload_zip.filename) and not (upload_files and upload_files[0].filename):
+        flash('Please provide files.', 'danger'); return redirect(request.url)
 
-    if not (upload_zip and upload_zip.filename) and not any(f.filename for f in upload_files):
-        flash('Please select a zip file or folder files to upload.', 'warning')
-        return redirect(request.url)
-
-    # ── 1 GB file size limit for ZIP ──────────────────────────────────────
-    MAX_ZIP_SIZE = 1 * 1024 * 1024 * 1024  # 1 GB
-    if upload_zip and upload_zip.filename:
-        upload_zip.seek(0, 2)
-        zip_size = upload_zip.tell()
-        upload_zip.seek(0)
-        if zip_size > MAX_ZIP_SIZE:
-            flash(f'ZIP file exceeds 1 GB limit ({zip_size / (1024**3):.1f} GB).', 'danger')
-            return redirect(request.url)
-
-    temp_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'bulk_check', uuid.uuid4().hex)
-    os.makedirs(temp_dir, exist_ok=True)
-
-    saved_paths = []
+    temp_dir = tempfile.mkdtemp(prefix=f'bulk_{course_id}_{assignment_id}_')
     try:
+        saved_paths = []
         if upload_zip and upload_zip.filename:
-            if not upload_zip.filename.lower().endswith('.zip'):
-                flash('Zip upload must be a .zip file.', 'danger')
-                return redirect(request.url)
             zip_path = os.path.join(temp_dir, secure_filename(upload_zip.filename))
             upload_zip.save(zip_path)
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as z:
-                    for member in z.namelist():
-                        if member.endswith('/'):
-                            continue
-                        normalized = os.path.normpath(member)
-                        if normalized.startswith('..') or os.path.isabs(normalized):
-                            continue
-                        dest_path = os.path.join(temp_dir, normalized)
-                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                        with z.open(member) as src, open(dest_path, 'wb') as dst:
-                            dst.write(src.read())
-            except Exception as e:
-                flash(f'Failed to extract ZIP: {e}', 'danger')
-                return redirect(request.url)
+            with zipfile.ZipFile(zip_path, 'r') as z:
+                for member in z.namelist():
+                    if member.endswith('/'): continue
+                    dest_path = os.path.normpath(os.path.join(temp_dir, member))
+                    if not dest_path.startswith(temp_dir): continue
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    with z.open(member) as src, open(dest_path, 'wb') as dst: dst.write(src.read())
 
-        # Also support direct folder upload via browser (multiple files)
         for fs in upload_files:
-            if not fs or not fs.filename:
-                continue
+            if not fs or not fs.filename: continue
             target = os.path.join(temp_dir, secure_filename(fs.filename))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            fs.save(target)
+            os.makedirs(os.path.dirname(target), exist_ok=True); fs.save(target)
 
-        for root, dirs, files in os.walk(temp_dir):
-            for fn in files:
-                fullpath = os.path.join(root, fn)
-                saved_paths.append(fullpath)
-
-        if not saved_paths:
-            flash('No valid files found in upload.', 'warning')
-            return redirect(request.url)
+        for root, _, files in os.walk(temp_dir):
+            for fn in files: saved_paths.append(os.path.join(root, fn))
 
         allowed_types = [t.strip().lower() for t in (assignment.allowed_file_types or '').split(',') if t.strip()]
-        filtered_paths = []
-        for path in saved_paths:
-            ext = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
-            if allowed_types and ext not in allowed_types:
-                continue
-            # Skip the zip archive itself
-            if path.endswith('.zip'):
-                continue
-            filtered_paths.append(path)
+        filtered_paths = [p for p in saved_paths if (not allowed_types or p.rsplit('.', 1)[-1].lower() in allowed_types) and not p.endswith('.zip')]
 
         if not filtered_paths:
-            flash('No files with allowed extensions were found.', 'danger')
-            return redirect(request.url)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            flash('No allowed files found.', 'danger'); return redirect(request.url)
 
-        # ── Phase 1: Text extraction ───────────────────────────────────────
-        # extract_text_bulk() handles every file type through one optimised path:
-        #   • Digital PDF (PyMuPDF/pdfplumber) → instant, no OCR, parallel-safe
-        #   • DOCX / TXT                       → instant, parallel-safe
-        #   • Scanned PDF / image              → Tesseract CLI subprocess
-        #       (subprocess OOM cannot kill Flask), 20 s hard timeout,
-        #       max 2 pages, DPI 120, early-exit at 150 words.
-        #
-        # max_workers=2 limits concurrent Tesseract subprocesses so we never
-        # have more than 2 child processes competing for RAM simultaneously.
-        extracted = {}
+        bulk_run = BulkCheckRun(assignment_id=assignment.id, course_id=course.id, run_by=current_user.id,
+                                total_files=len(filtered_paths), processed_count=0, status='pending')
+        db.session.add(bulk_run); db.session.commit()
 
-        def _extract_one(p):
-            return p, logic.extract_text_bulk(p)
+        import threading
+        from flask import current_app
+        threading.Thread(target=run_bulk_check_task, args=(current_app._get_current_object(), bulk_run.id, temp_dir, filtered_paths, assignment.id, course.id, current_user.id), daemon=True).start()
 
-        _workers = min(2, len(filtered_paths))
-        print(f"[Bulk] Phase 1 — extracting {len(filtered_paths)} file(s) "
-              f"({_workers} parallel workers)…")
+        return redirect(url_for('bulk_status', course_id=course_id, assignment_id=assignment_id, run_id=bulk_run.id))
 
-        with ThreadPoolExecutor(max_workers=_workers) as pool:
-            futures = {pool.submit(_extract_one, p): p for p in filtered_paths}
-            for fut in as_completed(futures):
-                p_current = futures[fut]
-                try:
-                    path, result = fut.result()
-                    extracted[path] = result
-                    print(f"   ↳ Progress: Extracted {os.path.basename(path)}", flush=True)
-                except Exception as e:
-                    print(f"   ↳ [ERROR] Extraction failed {os.path.basename(p_current)}: {e}", flush=True)
-                    extracted[p_current] = ("", None, None, 0.0)
-
-        t_extract = time.time()
-        print(f"[Bulk] Phase 1 — extracted {len(extracted)} files in {t_extract - t0:.1f}s")
-
-
-
-        # ── Phase 2: Build submission lists ───────────────────────────────
-        base_others = []
-        db_submissions = Submission.query.filter(
-            Submission.course_id == course.id,
-            Submission.assignment_id == assignment.id,
-            Submission.status == 'accepted'
-        ).all()
-        for sub in db_submissions:
-            if not sub.text_content:
-                continue
-            orig_name = sub.filename or ''
-            try:
-                m = json.loads(sub.files_metadata or '[]')
-                if isinstance(m, list) and m:
-                    orig_name = m[0].get('originalName', orig_name)
-            except Exception:
-                pass
-            base_others.append({
-                'text': sub.text_content,
-                'author_username': sub.author.username,
-                'submission_id': sub.id,
-                'filename': sub.filename or '',
-                'original_filename': orig_name,
-                '_unique_id': f'db_{sub.id}',
-            })
-
-        local_submissions = []
-        for p in filtered_paths:
-            txt, _, fhash, conf = extracted.get(p, ("", None, None, 0.0))
-            local_submissions.append({
-                'text': txt,
-                'author_username': os.path.basename(p),
-                'submission_id': None,
-                'filename': os.path.basename(p),
-                'original_filename': os.path.basename(p),
-                '_unique_id': f'local_{p}',
-                '_path': p,
-                '_file_hash': fhash,
-                '_ocr_confidence': conf,
-            })
-
-        all_submissions = base_others + local_submissions
-
-        # ── Phase 3: Document-level embeddings (fast, doc-only) ───────────
-        # _bulk_peer_comparison uses doc-level dot-products only — no chunks needed.
-        precomputed_embeddings = None
-        if hasattr(logic, '_HAS_ST') and logic._HAS_ST and logic._st_model is not None:
-            try:
-                import numpy as np
-                st_model = logic._st_model
-                unique_texts = []
-                seen = set()
-                for sub_item in all_submissions:
-                    text = sub_item.get('text')
-                    if not text:
-                        continue
-                    cl = logic.clean_text(text)
-                    if cl and cl not in seen:
-                        seen.add(cl)
-                        unique_texts.append(cl)
-                if unique_texts:
-                    print(f"[Bulk] Phase 3 — computing {len(unique_texts)} doc embeddings...")
-                    embeddings = st_model.encode(
-                        unique_texts,
-                        batch_size=16,
-                        convert_to_numpy=True,
-                        show_progress_bar=False,
-                    ).astype("float32")
-                    if hasattr(logic, '_HAS_FAISS') and logic._HAS_FAISS:
-                        import faiss as _faiss
-                        _faiss.normalize_L2(embeddings)
-                    else:
-                        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-                        embeddings = embeddings / np.maximum(norms, 1e-10)
-                    precomputed_embeddings = {t: emb for t, emb in zip(unique_texts, embeddings)}
-                    print(f"[Bulk] Precomputed {len(embeddings)} embeddings OK.")
-            except (MemoryError, OSError, RuntimeError) as e:
-                print(f"[Bulk] Embeddings skipped (low memory): {e} — TF-IDF fallback.")
-                precomputed_embeddings = None
-            except Exception as e:
-                print(f"[Bulk] Embedding failed: {e} — TF-IDF fallback.")
-                precomputed_embeddings = None
-
-        t_embed = time.time()
-        print(f"[Bulk] Phase 3 — embeddings in {t_embed - t_extract:.1f}s")
-
-        # ── Phase 4: Run plagiarism checks (parallelised, 2 workers) ───────
-        # All chunk lookups hit the precomputed cache → pure numpy dot-products,
-        # no model inference → fast even for large batches.
-        # ── Phase 4: Run plagiarism checks (sequential, _bulk_peer_comparison) ──
-        # _bulk_peer_comparison = O(N) dot-products per file, very fast sequentially.
-        # Threading removed: SQLAlchemy objects are not safe across thread contexts.
-        results = []
-        _threshold = assignment.similarity_threshold   # extract before loop
-        _td = temp_dir
-        print(f"[Bulk] Phase 4 — checking {len(local_submissions)} files (threshold={_threshold}%)...")
-        for lsub in local_submissions:
-            try:
-                _path   = lsub['_path']
-                _txt    = lsub['text']
-                _hash   = lsub['_file_hash']
-                _conf   = lsub['_ocr_confidence']
-                _uid    = lsub['_unique_id']
-                _others = [s for s in all_submissions if s['_unique_id'] != _uid]
-                _rep = logic.bulk_run_plagiarism_check_preextracted(
-                    text=_txt, file_hash=_hash, ocr_confidence=_conf or 100.0,
-                    other_submissions=_others,
-                    threshold=_threshold,
-                    precomputed_embeddings=precomputed_embeddings,
-                    filename=os.path.basename(_path),
-                )
-                if _hash:
-                    for s in _others:
-                        oh = s.get('_file_hash') or s.get('content_hash')
-                        if oh and oh == _hash:
-                            _rep['verdict'] = 'rejected'
-                            _rep['reason']  = f"Exact duplicate of {s['author_username']}"
-                            _rep['peer_score'] = 1.0
-                            _rep['is_exact_duplicate'] = True
-                            break
-                results.append({
-                    'filename':       os.path.relpath(_path, _td),
-                    'verdict':        _rep.get('verdict', 'unknown'),
-                    'reason':         _rep.get('reason', ''),
-                    'peer_score':     round(_rep.get('peer_score', 0.0) * 100, 1),
-                    'external_score': _rep.get('external_score', 0.0),
-                    'ocr_confidence': _rep.get('ocr_confidence', 0.0),
-                    'analysis_text':  _rep.get('analysis_text', ''),
-                    'peer_details':   _rep.get('peer_details', {}),
-                })
-            except Exception as _e:
-                import traceback
-                traceback.print_exc()   # always show full error in console
-                results.append({
-                    'filename': os.path.basename(lsub.get('_path', '')),
-                    'verdict': 'manual_review', 'reason': f'Error: {str(_e)[:120]}',
-                    'peer_score': 0.0, 'external_score': 0.0,
-                    'ocr_confidence': 0.0, 'analysis_text': '', 'peer_details': {},
-                })
-
-
-        elapsed = round(time.time() - t0, 1)
-        print(f"[Bulk] DONE — {len(results)} files processed in {elapsed}s")
-
-        # ── Persist run to database ──────────────────────────────────────────────
-        try:
-            bulk_run = BulkCheckRun(
-                assignment_id = assignment.id,
-                course_id     = course.id,
-                run_by        = current_user.id,
-                total_files   = len(results),
-                accepted      = sum(1 for r in results if r['verdict'] == 'accepted'),
-                rejected      = sum(1 for r in results if r['verdict'] == 'rejected'),
-                manual_review = sum(1 for r in results if r['verdict'] == 'manual_review'),
-                elapsed_sec   = elapsed,
-            )
-            db.session.add(bulk_run)
-            db.session.flush()   # get bulk_run.id before adding children
-
-            for row in results:
-                db.session.add(BulkCheckResult(
-                    run_id         = bulk_run.id,
-                    filename       = row.get('filename', ''),
-                    verdict        = row.get('verdict', ''),
-                    reason         = str(row.get('reason', ''))[:255],
-                    peer_score     = row.get('peer_score', 0.0),
-                    external_score = row.get('external_score', 0.0),
-                    ocr_confidence = row.get('ocr_confidence', 0.0),
-                    analysis_text  = row.get('analysis_text', ''),
-                    peer_details   = json.dumps(row.get('peer_details', {})),
-                ))
-
-            db.session.commit()
-            print(f"[Bulk] Saved run #{bulk_run.id} to DB ({len(results)} rows)")
-            saved_run_id = bulk_run.id
-        except Exception as _db_err:
-            db.session.rollback()
-            print(f"[Bulk] DB save failed (results still shown): {_db_err}")
-            saved_run_id = None
-
-        # Saved run ID is used for CSV/Excel download instead of session
-        saved_run_id = bulk_run.id
-
-        return render_template('bulk_check.html',
-                               course=course,
-                               assignment=assignment,
-                               results=results,
-                               elapsed_time=elapsed,
-                               saved_run_id=saved_run_id,
-                               history=BulkCheckRun.query.filter_by(
-                                   assignment_id=assignment_id,
-                                   course_id=course_id
-                               ).order_by(BulkCheckRun.created_at.desc()).limit(10).all())
-
-    finally:
+    except Exception as e:
         shutil.rmtree(temp_dir, ignore_errors=True)
+        flash(f'Scan error: {e}', 'danger'); return redirect(request.url)
+
+
+@app.route('/course/<int:course_id>/assignment/<int:assignment_id>/bulk/status/<int:run_id>')
+@login_required
+def bulk_status(course_id, assignment_id, run_id):
+    if current_user.role != 'faculty': abort(403)
+    run = db.get_or_404(BulkCheckRun, run_id)
+    if run.status == 'completed':
+        return redirect(url_for('bulk_check_run_view', course_id=course_id, assignment_id=assignment_id, run_id=run.id))
+    return render_template('bulk_status.html', course=db.get_or_404(Course, course_id), assignment=db.get_or_404(Assignment, assignment_id), run=run)
 
 
 @app.route('/course/<int:course_id>/assignment/<int:assignment_id>/download_bulk_csv')

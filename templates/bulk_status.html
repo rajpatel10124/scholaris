@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-lg border-0 rounded-lg">
+                <div class="card-header bg-primary text-white text-center py-4">
+                    <h2 class="mb-0">
+                        <i class="fas fa-spinner fa-spin mr-2"></i>
+                        Bulk Plagiarism Scan in Progress
+                    </h2>
+                </div>
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <p class="lead text-muted">
+                            Processing <strong>{{ run.total_files }}</strong> files for 
+                            <strong>{{ assignment.title }}</strong>
+                        </p>
+                    </div>
+
+                    {% set percentage = (run.processed_count / run.total_files * 100)|round|int if run.total_files > 0 else 0 %}
+                    
+                    <div class="progress mb-4" style="height: 35px; border-radius: 20px; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                             role="progressbar" 
+                             style="width: {{ percentage }}%; font-weight: bold; font-size: 1.1rem;" 
+                             aria-valuenow="{{ percentage }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ percentage }}%
+                        </div>
+                    </div>
+
+                    <div class="status-details text-center">
+                        <div class="d-flex justify-content-between mb-3 px-2">
+                            <span class="badge badge-pill badge-info py-2 px-3">
+                                <i class="fas fa-file-alt mr-1"></i>
+                                Processed: {{ run.processed_count }} / {{ run.total_files }}
+                            </span>
+                            <span class="badge badge-pill badge-warning py-2 px-3">
+                                <i class="fas fa-clock mr-1"></i>
+                                Status: {{ run.status|capitalize }}
+                            </span>
+                        </div>
+
+                        <div class="alert alert-light border text-left p-4 rounded-lg" style="background: #f8f9fa;">
+                            <h5><i class="fas fa-info-circle mr-2 text-primary"></i>What's happening?</h5>
+                            <ul class="mb-0 text-muted">
+                                <li>The system is performing AI-powered OCR on each student submission.</li>
+                                <li>We are checking for both internal peer-to-peer and external plagiarism.</li>
+                                <li><strong>You can safely leave this page.</strong> The scan will continue in the background.</li>
+                                <li>The results will be available in the "Reports" section when complete.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white text-center py-4">
+                    <div class="spinner-grow text-primary spinner-grow-sm" role="status"></div>
+                    <span class="text-muted ml-2">Automatically refreshing every 5 seconds...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-refresh every 5 seconds until complete
+    setTimeout(function() {
+        window.location.reload();
+    }, 5000);
+</script>
+
+<style>
+    .card {
+        transition: transform 0.3s ease;
+    }
+    .background-scanning {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+</style>
+{% endblock %}
