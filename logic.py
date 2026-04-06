@@ -916,9 +916,9 @@ def _extract_pdf_text_bulk(path: str) -> tuple:
     except Exception:
         pass
 
-    _MAX_PAGES       = 4    # Scan 4 pages to capture more handwriting context
-    _DPI             = 200  # 200 DPI → High resolution for handwriting recognition
-    _EARLY_EXIT_WDS  = 300  # Higher limit for bulk analysis coverage
+    _MAX_PAGES       = 3    # Balanced for speed/context
+    _DPI             = 140  # Standard DPI for faster processing
+    _EARLY_EXIT_WDS  = 300  
 
     print(f"[PDF-bulk] Scanned — rendering ≤{_MAX_PAGES} pages @ {_DPI} DPI via subprocess OCR…")
     page_texts, page_confs = [], []
@@ -1670,8 +1670,9 @@ def _bulk_peer_comparison(text, other_submissions, precomputed_embeddings=None):
         stt = _structural_similarity(text[:3000], ot[:3000])
         sty = _stylometric_similarity(text[:1500], ot[:1500])
         
-        # Balance the score: 55% Semantic (meaning), 30% Structural (exact), 15% Style
-        fused = round(sem * 0.55 + stt * 0.30 + sty * 0.15, 4)
+        # Blend: 45% Semantic (meaning), 40% Structural (exact), 15% Style
+        # Re-introducing more structural weight for 'natural' score feeling
+        fused = round(sem * 0.45 + stt * 0.40 + sty * 0.15, 4)
 
         if fused < 0.35:
             continue
