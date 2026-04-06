@@ -23,6 +23,13 @@ try:
         ("manual_review", "INTEGER DEFAULT 0"),
         ("elapsed_sec", "DOUBLE PRECISION")
     ]
+    
+    # Check/Alter password column length for scrypt hashes
+    try:
+        cur.execute('ALTER TABLE "user" ALTER COLUMN password TYPE VARCHAR(255);')
+        print("[SUCCESS] Altered user.password column length to 255.")
+    except Exception as e:
+        print(f"[ERROR] Failed to alter password column: {e}")
 
     for col_name, col_type in columns:
         try:
