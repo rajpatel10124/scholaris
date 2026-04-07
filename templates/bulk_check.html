@@ -289,22 +289,13 @@ document.getElementById('bulkForm').addEventListener('submit', function (e) {
   const btn = document.getElementById('submitBtn');
   const zip = document.getElementById('zipInput');
   const folder = document.getElementById('folderInput');
-  
-  // Validation
   if (zip.files.length && zip.files[0].size > MAX_SIZE) { e.preventDefault(); return; }
   let total = [...folder.files].reduce((s, f) => s + f.size, 0);
   if (total > MAX_SIZE) { e.preventDefault(); return; }
-  
-  // Immediate UI Feedback (Prevents "Click-Hang" feel)
   btn.disabled = true;
   const btnTextElem = document.getElementById('btnText');
-  btnTextElem.textContent = 'Uploading & Preparing... (Please wait)';
+  btnTextElem.textContent = 'Uploading & Preparing…';
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + btnTextElem.textContent;
-  
-  // Optional: prevent page leave
-  window.onbeforeunload = function() {
-    return "Uploading/Processing in progress. Leaving this page might cancel the upload.";
-  };
 });
 
 document.addEventListener('DOMContentLoaded', () => {

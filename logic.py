@@ -916,9 +916,9 @@ def _extract_pdf_text_bulk(path: str) -> tuple:
     except Exception:
         pass
 
-    _MAX_PAGES       = 2    # Balanced for speed/context in bulk mode
-    _DPI             = 120  # Optimized DPI for 30% faster processing
-    _EARLY_EXIT_WDS  = 200  
+    _MAX_PAGES       = 3    # Balanced for speed/context
+    _DPI             = 140  # Standard DPI for faster processing
+    _EARLY_EXIT_WDS  = 300  
 
     print(f"[PDF-bulk] Scanned — rendering ≤{_MAX_PAGES} pages @ {_DPI} DPI via subprocess OCR…")
     page_texts, page_confs = [], []
@@ -1658,21 +1658,12 @@ def _bulk_peer_comparison(text, other_submissions, precomputed_embeddings=None):
         if not ot or len(ot.split()) < 10:
             continue
         oc = clean_text(ot)
-        
-        # --- MEGA-SPEED HEURISTIC FILTER ---
-        # Perform a lightning-fast TF-IDF check before any AI work.
-        # If the overlap is near-zero, skip BERT/Structural/Style entirely.
-        tf_sim = _tfidf_similarity(curr_cl, oc)
-        if tf_sim < 0.12:
-            continue
-
         sem = 0.0 # Safety initialization
         if curr_emb is not None and precomputed_embeddings is not None:
             oe = precomputed_embeddings.get(oc)
-            # Use precomputed Vector vs Vector (approx. 0.001ms)
-            sem = float(np.dot(curr_emb, oe)) if oe is not None else tf_sim
+            sem = float(np.dot(curr_emb, oe)) if oe is not None else _tfidf_similarity(curr_cl, oc)
         else:
-            sem = tf_sim
+            sem = _tfidf_similarity(curr_cl, oc)
 
         # For noisy OCR/Handwriting, structural/stylometric signals are often zero.
         # We prioritize the Semantic (meaning) signal if it is high enough.
