@@ -187,3 +187,5 @@ Flask-Mail==0.10.0
 flask-socketio==5.5.1
 eventlet>=0.40.3
 deep-translator==1.11.4
+redis==5.0.1
+python-socketio>=5.11.0

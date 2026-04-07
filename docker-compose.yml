@@ -6,6 +6,7 @@ services:
 
   # ── Flask / Gunicorn application ──────────────────────────────────────────
   web:
+    build: .
     image: rajpatel1202/scholaris:latest
     restart: unless-stopped
     ports:
@@ -13,14 +14,22 @@ services:
     env_file:
       - .env
     environment:
-      # Override DATABASE_URL to point to the postgres service below
       DATABASE_URL: postgresql://scholaris:${POSTGRES_PASSWORD}@db:5432/scholaris
+      REDIS_URL: redis://redis:6379/0
     volumes:
-      # Persist uploaded files outside the container
       - uploads:/app/static/uploads
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - scholaris_net
+
+  # ── Redis (Message Queue & Progress Tracking) ───────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
     networks:
       - scholaris_net
 
