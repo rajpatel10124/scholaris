@@ -85,81 +85,20 @@ def emit_progress(run_id, progress, message):
     }, namespace='/')
 
 def run_bulk_check_task(run_id):
+    pass
+
 # --- EMAIL CONFIG ---
-# For Gmail: enable "App Passwords" and use that as MAIL_PASSWORD.
-# Leave MAIL_SERVER blank to disable email (OTP printed to console instead).
-
-# ENABLE_EMAIL_VERIFICATION = False  # If True, new users must verify their email with a 6-digit OTP before logging in.
-
-# app.config['MAIL_SERVER']   = os.environ.get('MAIL_SERVER',   'smtp.gmail.com')
-# app.config['MAIL_PORT']     = int(os.environ.get('MAIL_PORT', 587))
-# app.config['MAIL_USE_TLS']  = True
-# app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')   # your@gmail.com
-# app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')   # app password
-# app.config['MAIL_FROM']     = os.environ.get('MAIL_FROM', 'noreply@scholaris.app')
-
-# # OTP TTL in seconds (10 minutes)
-# OTP_TTL = 600
-
-# db.init_app(app)
-# bcrypt      = Bcrypt(app)
-# login_mgr   = LoginManager(app)
-# login_mgr.login_view     = 'login'
-# login_mgr.login_message  = 'Please log in to continue.'
-# login_mgr.login_message_category = 'warning'
-
-# # ─────────────────────────────────────────────────────────────────────────────
-# # OTP HELPERS
-# # ─────────────────────────────────────────────────────────────────────────────
-# def _generate_otp() -> str:
-#     """Return a zero-padded 6-digit OTP string."""
-#     return f"{random.randint(0, 999999):06d}"
-
-
-# def _send_otp_email(to_email: str, otp: str, username: str) -> bool:
-#     """
-#     Send OTP via SMTP. Returns True on success, False on failure.
-#     Falls back to console print when MAIL_USERNAME is not configured.
-#     """
-#     if not app.config.get('MAIL_USERNAME'):
-#         # Dev fallback — print to console so development works without email
-#         print(f"[OTP] {username} <{to_email}>: {otp}")
-#         return True
-#     try:
-#         msg = MIMEMultipart('alternative')
-#         msg['Subject'] = 'Your Scholaris Verification Code'
-#         msg['From']    = app.config['MAIL_FROM']
-#         msg['To']      = to_email
-
-#         html_body = f"""
-#         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
-#           <h2 style="color:#0f0f11;margin-bottom:4px;">Verify your email</h2>
-#           <p style="color:#7a7a8a;">Hi {username}, use the code below to complete your registration.</p>
-#           <div style="background:#f5f5f7;border-radius:12px;padding:24px;text-align:center;margin:24px 0;">
-#             <span style="font-family:monospace;font-size:2.5rem;font-weight:700;letter-spacing:0.2em;color:#5b5ef4;">{otp}</span>
-#           </div>
-#           <p style="color:#7a7a8a;font-size:0.85rem;">This code expires in 10 minutes. If you did not sign up, ignore this email.</p>
-#         </div>
-#         """
-#         msg.attach(MIMEText(html_body, 'html'))
-
-#         with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT']) as smtp:
-#             smtp.ehlo()
-#             if app.config['MAIL_USE_TLS']:
-#                 smtp.starttls()
-#             smtp.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-#             smtp.sendmail(app.config['MAIL_FROM'], [to_email], msg.as_string())
-#         return True
-#     except Exception as e:
 #         print(f"[EMAIL ERROR] Could not send OTP to {to_email}: {e}")
 #         return False
 
 
-# ── Jinja filter used in reports.html: {{ sub.plagiarism_report|fromjson }} ──
+# ── Jinja filter used in reports.html ──
 @app.template_filter('fromjson')
 def fromjson_filter(s):
     try:
-        return json.loads(s) if s else {}
+        if not s: return {}
+        if isinstance(s, (dict, list)): return s
+        return json.loads(s)
     except:
         return {}
 
@@ -198,13 +137,6 @@ def warmup_once():
         app._models_warmed = True
         print("[SCHOLARIS] Starting background model warmup...")
         threading.Thread(target=logic.warmup_models, daemon=True).start()
-def fromjson_filter(value):
-    if not value:
-        return {}
-    try:
-        return json.loads(value)
-    except Exception:
-        return {}
 
 # import re
 
@@ -214,9 +146,9 @@ def fromjson_filter(value):
 #         return ""
 #     return re.sub(find, replace, s)
 
-# @login_mgr.user_loader
-# def load_user(user_id):
-#     return db.session.get(User, int(user_id))
+@login_mgr.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
 
 ENABLE_EMAIL_VERIFICATION = True   # OTP email verification active — set MAIL_USERNAME + MAIL_PASSWORD env vars
 
@@ -243,6 +175,11 @@ OTP_MAX_ATTEMPTS = 3     # brute-force protection
 
 # ── EXTENSIONS ────────────────────────────────────────────────────────────────
 db.init_app(app)
+bcrypt = Bcrypt(app)
+login_mgr = LoginManager(app)
+login_mgr.login_view = 'login'
+login_mgr.login_message = 'Please log in to continue.'
+login_mgr.login_message_category = 'warning'
 
 # --- GLOBAL SELF-HEALING DB SYNC (DIRECT-ACCESS) ---
 with app.app_context():
