@@ -667,7 +667,24 @@ def login():
                 flash(f'Account locked. Try again in {mins} minute(s).', 'danger')
                 return redirect(url_for('login'))
 
-            if bcrypt.check_password_hash(user.password, password):
+            # --- ROBUST PASSWORD CHECK (Self-healing for corrupted production salt) ---
+            pw_hash = user.password
+
+            # Detect and fix the common 'b\'$2b$...\'' string literal corruption
+            if isinstance(pw_hash, str) and pw_hash.startswith("b'") and pw_hash.endswith("'"):
+                pw_hash = pw_hash[2:-1]
+
+            valid_login = False
+            try:
+                # Ensure we handle bytes vs string explicitly if the library stumbles
+                if isinstance(pw_hash, str):
+                    pw_hash = pw_hash.encode('utf-8')
+                
+                valid_login = bcrypt.check_password_hash(pw_hash, password)
+            except Exception as e:
+                print(f"[LOGIN] Bcrypt error: {e}")
+
+            if valid_login:
                 if not user.is_active:
                     flash('Your account has been deactivated. Contact an admin.', 'danger')
                     return redirect(url_for('login'))
