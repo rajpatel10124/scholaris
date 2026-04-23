@@ -1,74 +1,72 @@
 {% extends "base.html" %}
-
+{% block title %}Scan in Progress — Scholaris{% endblock %}
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">
         <div class="col-md-8">
-            <div class="card shadow-lg border-0 rounded-lg">
-                <div class="card-header bg-primary text-white text-center py-4">
-                    <h2 class="mb-0">
-                        <i class="fas fa-spinner fa-spin mr-2"></i>
-                        Bulk Plagiarism Scan in Progress
-                    </h2>
-                </div>
+            <div class="card shadow-sm border-0">
                 <div class="card-body p-5">
                     <div class="text-center mb-4">
-                        <p class="lead text-muted">
-                            Processing <strong>{{ run.total_files }}</strong> files for 
-                            <strong>{{ assignment.title }}</strong>
+                        <div class="mb-3">
+                            <div class="spinner-border text-accent" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <h2 class="h4 fw-bold mb-2">Plagiarism Scan in Progress</h2>
+                        <p class="text-muted">
+                            Processing <strong>{{ run.total_files }}</strong> files
+                            {% if run.title %} for <strong>{{ run.title }}</strong>{% endif %}
                         </p>
                     </div>
 
                     {% set total = run.total_files | default(0) %}
                     {% set processed = run.processed_count | default(0) %}
                     {% set percentage = ((processed / total) * 100) | round | int if total > 0 else 0 %}
-                    
-                    <div class="progress mb-4" style="height: 35px; border-radius: 20px; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
-                             role="progressbar" 
-                             style="width: {{ percentage }}%; font-weight: bold; font-size: 1.1rem;" 
-                             aria-valuenow="{{ percentage }}" 
-                             aria-valuemin="0" 
+
+                    <div class="progress mb-4" style="height: 30px; border-radius: 16px; overflow: hidden; background: var(--surface);">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar"
+                             style="width: {{ percentage }}%; background: var(--accent); font-weight: 600; font-size: 0.9rem;"
+                             aria-valuenow="{{ percentage }}"
+                             aria-valuemin="0"
                              aria-valuemax="100">
                             {{ percentage }}%
                         </div>
                     </div>
 
-                    <div class="status-details text-center">
-                        <div class="d-flex justify-content-between mb-3 px-2">
-                            <span class="badge badge-pill badge-info py-2 px-3">
-                                <i class="fas fa-file-alt mr-1"></i>
-                                Processed: {{ run.processed_count }} / {{ run.total_files }}
-                            </span>
-                            <span class="badge badge-pill badge-warning py-2 px-3">
-                                <i class="fas fa-clock mr-1"></i>
-                                Status: {{ (run.status or 'pending')|capitalize }}
-                            </span>
-                        </div>
-
-                        <div class="alert alert-light border text-left p-4 rounded-lg" style="background: #f8f9fa;">
-                            <h5><i class="fas fa-info-circle mr-2 text-primary"></i>What's happening?</h5>
-                            <ul class="mb-0 text-muted">
-                                <li>The system is performing AI-powered OCR on each student submission.</li>
-                                <li>We are checking for both internal peer-to-peer and external plagiarism.</li>
-                                <li><strong>You can safely leave this page.</strong> The scan will continue in the background.</li>
-                                <li>The results will be available in the "Reports" section when complete.</li>
-                            </ul>
-                        </div>
+                    <div class="d-flex justify-content-between mb-3 px-2">
+                        <span class="badge" style="background: var(--accent-3); color: var(--accent); padding: 6px 12px;">
+                            <i class="bi bi-file-earmark-text me-1"></i>
+                            Processed: {{ run.processed_count }} / {{ run.total_files }}
+                        </span>
+                        <span class="badge" style="background: var(--warning-bg); color: var(--warning); padding: 6px 12px;">
+                            <i class="bi bi-clock me-1"></i>
+                            {{ (run.status or 'pending')|capitalize }}
+                        </span>
                     </div>
-                </div>
-                <div class="card-footer bg-white text-center py-4">
-                    <div class="spinner-grow text-primary spinner-grow-sm" role="status"></div>
-                    <span class="text-muted ml-2">Automatically refreshing every 5 seconds...</span>
+
+                    <div class="p-4 rounded-3 mt-3" style="background: var(--surface); border: 1px solid var(--border);">
+                        <h6 class="fw-bold mb-2"><i class="bi bi-info-circle text-accent me-2"></i>What's happening?</h6>
+                        <ul class="text-muted small mb-0" style="line-height: 1.8;">
+                            <li>The system is performing AI-powered text extraction and analysis.</li>
+                            <li>All files are compared for peer-to-peer similarity and external patterns.</li>
+                            <li><strong>You can safely leave this page.</strong> The scan continues in the background.</li>
+                            <li>Results will appear automatically when complete.</li>
+                        </ul>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <div class="spinner-grow spinner-grow-sm text-accent" role="status"></div>
+                        <span class="text-muted small ms-2">Auto-refreshing...</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Include Socket.io Client -->
+<!-- Socket.io for real-time progress -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
-
 <script>
     const socket = io();
     const runId = {{ run.id }};
@@ -80,47 +78,24 @@
     });
 
     socket.on('bulk_progress', (data) => {
-        console.log("Progress Update:", data);
         if (data.run_id == runId) {
-            // Update percentage
             const pct = Math.round(data.percentage);
             const progressBar = document.querySelector('.progress-bar');
             progressBar.style.width = pct + '%';
             progressBar.setAttribute('aria-valuenow', pct);
             progressBar.innerText = pct + '%';
 
-            // Update status text
-            const statusMsg = document.getElementById('status-message');
-            if (statusMsg) statusMsg.innerText = data.message;
-
-            // Update processed count
-            const processedCount = document.getElementById('processed-count');
-            if (processedCount) processedCount.innerText = data.processed;
-
-            // If complete, redirect after a short delay
             if (pct >= 100 || data.message.toLowerCase().includes('complete')) {
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                setTimeout(() => { window.location.reload(); }, 1500);
             }
         }
     });
 
-    // Fallback: still refresh every 15s in case of WS failure
-    setTimeout(function() {
-        window.location.reload();
-    }, 15000);
+    // Fallback refresh
+    setTimeout(function() { window.location.reload(); }, 15000);
 </script>
 
 <style>
-    .card {
-        transition: transform 0.3s ease;
-    }
-    .background-scanning {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    .progress-bar {
-        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
+    .progress-bar { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
 </style>
 {% endblock %}

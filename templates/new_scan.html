@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}New Scan — Scholaris{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 720px;">
+
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+      <li class="breadcrumb-item active">New Scan</li>
+    </ol>
+  </nav>
+
+  <div class="text-center mb-4 fade-up">
+    <h1 style="font-family: var(--font-serif); font-size: 2rem; letter-spacing: -0.5px;">
+      <i class="bi bi-cloud-upload text-accent me-2"></i>Upload &amp; Scan
+    </h1>
+    <p class="text-muted">Upload a ZIP archive or individual files. All documents will be compared against each other for similarity.</p>
+  </div>
+
+  <div class="card border-0 shadow-sm fade-up stagger-1">
+    <div class="card-body p-4 p-lg-5">
+      <form method="POST" enctype="multipart/form-data" id="scanForm">
+
+        <!-- Scan Title -->
+        <div class="mb-4">
+          <label class="form-label" for="scanTitle">Scan Title</label>
+          <input type="text" class="form-control" id="scanTitle" name="title"
+                 placeholder="e.g. Assignment 3 Batch Check" maxlength="200">
+          <div class="form-text">Give your scan a name so you can find it later.</div>
+        </div>
+
+        <!-- ZIP Upload -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-file-earmark-zip me-1"></i>ZIP File
+            <small class="text-muted fw-normal">(max 1 GB)</small>
+          </label>
+          <input type="file" class="form-control" name="zipfile" accept=".zip" id="zipInput">
+          <div id="zipSizeError" class="text-danger mt-1 small" style="display:none;"></div>
+        </div>
+
+        <!-- Divider -->
+        <div class="d-flex align-items-center gap-3 my-4">
+          <hr class="flex-grow-1" style="border-color: var(--border);">
+          <span class="text-muted small fw-semibold">OR</span>
+          <hr class="flex-grow-1" style="border-color: var(--border);">
+        </div>
+
+        <!-- Individual Files / Folder -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-folder2-open me-1"></i>Individual Files or Folder
+          </label>
+          <input type="file" class="form-control" name="files" multiple id="filesInput"
+                 accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp">
+          <div class="form-text">Select PDF, DOCX, TXT, or image files. Supports: pdf, docx, doc, txt, jpg, png, tiff, bmp, webp.</div>
+          <div id="fileSizeError" class="text-danger mt-1 small" style="display:none;"></div>
+        </div>
+
+        <!-- Similarity Threshold -->
+        <div class="mb-4 p-3 rounded-3" style="background: var(--surface); border: 1px solid var(--border);">
+          <label class="form-label fw-semibold mb-3">
+            <i class="bi bi-sliders me-1"></i>Similarity Threshold
+          </label>
+          <div class="d-flex align-items-center gap-3">
+            <input type="range" class="form-range flex-grow-1" id="thresholdRange"
+                   name="threshold" min="0" max="100" value="40" step="5">
+            <div class="d-flex align-items-center gap-1" style="min-width: 70px;">
+              <span id="thresholdValue" class="fw-bold text-accent" style="font-size: 1.4rem;">40</span>
+              <span class="text-muted">%</span>
+            </div>
+          </div>
+          <div class="form-text mt-2">
+            Files with similarity <strong>above</strong> this value will be flagged as <span class="text-danger fw-semibold">rejected</span>. 
+            Lower = stricter. Recommended: 40–70%.
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn btn-primary w-100 py-3" id="submitBtn" style="font-size: 1rem;">
+          <i class="bi bi-search me-2"></i><span id="btnText">Start Plagiarism Scan</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MAX_SIZE = 1 * 1024 * 1024 * 1024; // 1 GB
+
+// Threshold slider
+document.getElementById('thresholdRange').addEventListener('input', function() {
+  document.getElementById('thresholdValue').textContent = this.value;
+});
+
+// ZIP size check
+document.getElementById('zipInput').addEventListener('change', function() {
+  const err = document.getElementById('zipSizeError');
+  if (this.files.length && this.files[0].size > MAX_SIZE) {
+    err.textContent = `File is ${(this.files[0].size/(1024*1024)).toFixed(0)} MB — exceeds 1 GB limit.`;
+    err.style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+  } else {
+    err.style.display = 'none';
+    document.getElementById('submitBtn').disabled = false;
+  }
+});
+
+// Files size check
+document.getElementById('filesInput').addEventListener('change', function() {
+  const err = document.getElementById('fileSizeError');
+  let total = [...this.files].reduce((s, f) => s + f.size, 0);
+  if (total > MAX_SIZE) {
+    err.textContent = `Total is ${(total/(1024*1024)).toFixed(0)} MB — exceeds 1 GB limit.`;
+    err.style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+  } else {
+    err.style.display = 'none';
+    document.getElementById('submitBtn').disabled = false;
+  }
+});
+
+// Submit spinner
+document.getElementById('scanForm').addEventListener('submit', function(e) {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading & Starting Scan...';
+});
+</script>
+{% endblock %}

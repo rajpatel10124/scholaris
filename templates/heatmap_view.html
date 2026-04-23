@@ -9,18 +9,16 @@
         <div>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-1">
-                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
-                    {% if course %}
-                    <li class="breadcrumb-item"><a href="{{ url_for('course_page', course_id=course.id) }}">{{ course.code }}</a></li>
-                    {% endif %}
-                    <li class="breadcrumb-item active">Heatmap Analysis</li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('scan_results', run_id=run.id) }}">Results</a></li>
+                    <li class="breadcrumb-item active">Heatmap</li>
                 </ol>
             </nav>
             <h1 class="h3 mb-0 fw-bold text-gradient">Plagiarism Heatmap</h1>
             <p class="text-muted small mt-1">
-                <i class="fas fa-file-alt me-1"></i> {{ result.filename }} 
+                <i class="bi bi-file-earmark-text me-1"></i> {{ result.filename }}
                 {% if result.verdict %}
-                <span class="badge rounded-pill ms-2 
+                <span class="badge rounded-pill ms-2
                     {% if result.verdict == 'accepted' %}bg-success-subtle text-success
                     {% elif result.verdict == 'rejected' %}bg-danger-subtle text-danger
                     {% else %}bg-warning-subtle text-warning{% endif %}">
@@ -31,11 +29,11 @@
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
-                <i class="fas fa-print me-1"></i> Print
+                <i class="bi bi-printer me-1"></i> Print
             </button>
-            <button class="btn btn-primary btn-sm" onclick="window.history.back()">
-                <i class="fas fa-arrow-left me-1"></i> Back to Report
-            </button>
+            <a href="{{ url_for('scan_results', run_id=run.id) }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i> Back to Results
+            </a>
         </div>
     </div>
 
@@ -47,11 +45,9 @@
                     <h5 class="card-title mb-0 fw-semibold text-dark">Document View</h5>
                     <div class="dropdown">
                         <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-cog me-1"></i> Settings
+                            <i class="bi bi-gear me-1"></i> Settings
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                            <li><a class="dropdown-item" href="#" onclick="toggleLineNumbers()">Show Line Numbers</a></li>
-                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="#" onclick="adjustFontSize(1)">Increase Font Size</a></li>
                             <li><a class="dropdown-item" href="#" onclick="adjustFontSize(-1)">Decrease Font Size</a></li>
                         </ul>
@@ -60,8 +56,8 @@
                 <div class="card-body p-4 bg-light-subtle">
                     <div id="heatmapContainer" class="heatmap-content fs-5 lh-lg" style="font-family: 'Inter', system-ui, sans-serif; white-space: pre-wrap;">
                         {% for item in heatmap %}
-                            <span class="heatmap-word" 
-                                  data-type="{{ item.type }}" 
+                            <span class="heatmap-word"
+                                  data-type="{{ item.type }}"
                                   data-score="{{ item.score }}"
                                   data-detail="{{ item.detail }}"
                                   style="cursor: help; {% if item.type == 'red' %}background-color: rgba(220, 53, 69, 0.15); border-bottom: 2px solid #dc3545;{% elif item.type == 'yellow' %}background-color: rgba(255, 193, 7, 0.2); border-bottom: 2px solid #ffc107;{% endif %}"
@@ -70,8 +66,8 @@
                     </div>
                     {% if not heatmap %}
                         <div class="text-center py-5">
-                            <i class="fas fa-ghost fa-3x text-light mb-3"></i>
-                            <p class="text-muted">No heatmap data available for this document.</p>
+                            <i class="bi bi-file-earmark-x" style="font-size: 3rem; color: var(--surface-3);"></i>
+                            <p class="text-muted mt-2">No heatmap data available for this document.</p>
                         </div>
                     {% endif %}
                 </div>
@@ -85,21 +81,21 @@
                 <div class="card-body p-4">
                     <h6 class="fw-bold mb-3">Analysis Legend</h6>
                     <div class="d-flex align-items-center mb-3 p-3 rounded-3 bg-danger-subtle border-start border-4 border-danger">
-                        <div class="me-3"><i class="fas fa-copy text-danger"></i></div>
+                        <div class="me-3"><i class="bi bi-files text-danger"></i></div>
                         <div>
                             <div class="fw-bold text-danger">Plagiarized (Red)</div>
                             <div class="small text-danger-emphasis opacity-75">Exact or high similarity with peer documents.</div>
                         </div>
                     </div>
                     <div class="d-flex align-items-center mb-3 p-3 rounded-3 bg-warning-subtle border-start border-4 border-warning">
-                        <div class="me-3"><i class="fas fa-robot text-warning"></i></div>
+                        <div class="me-3"><i class="bi bi-robot text-warning"></i></div>
                         <div>
                             <div class="fw-bold text-warning-emphasis">AI Generated (Yellow)</div>
                             <div class="small text-warning-emphasis opacity-75">Predictive patterns consistent with LLM output.</div>
                         </div>
                     </div>
                     <div class="d-flex align-items-center p-3 rounded-3 bg-success-subtle border-start border-4 border-success">
-                        <div class="me-3"><i class="fas fa-user-check text-success"></i></div>
+                        <div class="me-3"><i class="bi bi-person-check text-success"></i></div>
                         <div>
                             <div class="fw-bold text-success">Original (Green)</div>
                             <div class="small text-success-emphasis opacity-75">Natural human writing variability detected.</div>
@@ -124,7 +120,7 @@
                     <p id="detailDesc" class="text-muted"></p>
                     <hr>
                     <div class="text-start">
-                        <small class="text-muted text-uppercase fw-bold ls-1 d-block mb-1">Sentence Context:</small>
+                        <small class="text-muted text-uppercase fw-bold d-block mb-1" style="letter-spacing: 0.5px;">Sentence Context:</small>
                         <blockquote id="detailContext" class="bg-light p-3 rounded-3 border-start border-3 border-secondary fst-italic mb-0"></blockquote>
                     </div>
                 </div>
@@ -139,7 +135,6 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    .ls-1 { letter-spacing: 0.5px; }
     .heatmap-word {
         transition: all 0.2s ease;
         padding: 2px 0;
@@ -167,37 +162,36 @@
         const score = el.dataset.score;
         const detail = el.dataset.detail;
         const text = el.innerText;
-        
-        // UI reset
+
         document.querySelectorAll('.heatmap-word').forEach(w => w.classList.remove('active'));
         el.classList.add('active');
-        
+
         const panel = document.getElementById('detailPanel');
         const icon = document.getElementById('detailIcon');
         const title = document.getElementById('detailTitle');
         const scoreEl = document.getElementById('detailScore').querySelector('.fs-1');
         const desc = document.getElementById('detailDesc');
         const ctx = document.getElementById('detailContext');
-        
+
         panel.style.display = 'block';
         ctx.innerText = text;
         scoreEl.innerText = Math.round(score);
-        
+
         if (type === 'red') {
-            icon.innerHTML = '<i class="fas fa-exclamation-triangle fa-3x text-danger"></i>';
+            icon.innerHTML = '<i class="bi bi-exclamation-triangle-fill" style="font-size: 3rem; color: var(--danger);"></i>';
             title.innerText = "Plagiarism Detected";
             title.className = "fw-bold text-danger";
-            desc.innerText = detail || "This sentence matches content found in another student's submission.";
+            desc.innerText = detail || "This sentence matches content from another document in the batch.";
         } else if (type === 'yellow') {
-            icon.innerHTML = '<i class="fas fa-robot fa-3x text-warning"></i>';
+            icon.innerHTML = '<i class="bi bi-robot" style="font-size: 3rem; color: var(--warning);"></i>';
             title.innerText = "AI Generated Content";
             title.className = "fw-bold text-warning-emphasis";
-            desc.innerText = detail || "Sentence structure and predictability scores suggest AI tool usage.";
+            desc.innerText = detail || "Sentence structure and predictability suggest AI tool usage.";
         } else {
-            icon.innerHTML = '<i class="fas fa-check-circle fa-3x text-success"></i>';
+            icon.innerHTML = '<i class="bi bi-check-circle-fill" style="font-size: 3rem; color: var(--success);"></i>';
             title.innerText = "Original Content";
             title.className = "fw-bold text-success";
-            desc.innerText = "No significant matches or AI patterns found. Looks like original writing.";
+            desc.innerText = "No significant matches or AI patterns found.";
             scoreEl.innerText = "0";
         }
     }
@@ -210,8 +204,7 @@
     function adjustFontSize(dir) {
         const el = document.getElementById('heatmapContainer');
         const current = window.getComputedStyle(el).fontSize;
-        const newSize = (parseInt(current) + (dir * 2)) + 'px';
-        el.style.fontSize = newSize;
+        el.style.fontSize = (parseInt(current) + (dir * 2)) + 'px';
     }
 </script>
 {% endblock %}

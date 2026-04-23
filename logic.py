@@ -1744,7 +1744,8 @@ def peer_comparison(text: str, other_texts: list,
 
         chunk_scores.sort(reverse=True)
         avg_top = sum(chunk_scores[:3]) / len(chunk_scores[:3])
-        fused_final = round(0.75*avg_top + 0.25*max(chunk_scores), 4)
+        # Maximum Penalty: If even ONE core idea or block matches, flag it heavily.
+        fused_final = round(0.10*avg_top + 0.90*max(chunk_scores), 4)
 
         if fused_final < 0.40:
             continue

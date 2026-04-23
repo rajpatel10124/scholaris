@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Scholaris — Integrity Portal{% endblock %}</title>
+    <title>{% block title %}Scholaris — Bulk Plagiarism Checker{% endblock %}</title>
+    <meta name="description" content="Upload documents, detect plagiarism instantly. Bulk file comparison with AI-powered analysis and detailed heatmaps.">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -69,6 +70,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            text-decoration: none;
         }
         .brand-dot {
             width: 8px; height: 8px;
@@ -87,41 +89,6 @@
         }
         .nav-pill:hover { color: var(--ink); background: var(--surface-2); }
         .nav-pill.active { color: var(--accent); background: var(--accent-3); }
-
-        .btn-nav-user {
-            display: flex; align-items: center; gap: 8px;
-            background: var(--white);
-            border: 1px solid var(--border);
-            border-radius: 40px;
-            padding: 6px 14px 6px 8px;
-            font-size: 0.84rem;
-            font-weight: 500;
-            color: var(--ink);
-            cursor: pointer;
-            transition: all 0.18s;
-        }
-        .btn-nav-user:hover { box-shadow: var(--shadow-sm); border-color: var(--surface-3); }
-        .user-avatar {
-            width: 28px; height: 28px;
-            background: var(--accent-3);
-            color: var(--accent);
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.75rem; font-weight: 700;
-        }
-
-        /* ── ROLE CHIP ── */
-        .role-chip {
-            font-size: 0.68rem;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            padding: 2px 9px;
-            border-radius: 40px;
-        }
-        .role-chip.student  { background: var(--accent-3); color: var(--accent); }
-        .role-chip.faculty  { background: #e0f2fe; color: #0369a1; }
-        .role-chip.admin    { background: #fce7f3; color: #be185d; }
 
         /* ── FLASH ── */
         .flash-container {
@@ -151,7 +118,6 @@
         .flash-close {
             margin-left: auto; background: none; border: none;
             color: var(--ink-mute); cursor: pointer; padding: 0; font-size: 1rem;
-            line-height: 1;
         }
         @keyframes slideIn {
             from { opacity: 0; transform: translateX(20px); }
@@ -168,17 +134,12 @@
         .btn-primary:hover { background: #4a4de0; border-color: #4a4de0; box-shadow: 0 4px 14px rgba(91,94,244,0.4); transform: translateY(-1px); }
         .btn-outline-primary { border-color: var(--accent); color: var(--accent); font-weight: 600; font-size: 0.875rem; border-radius: var(--radius-sm); padding: 8px 20px; transition: all 0.18s; }
         .btn-outline-primary:hover { background: var(--accent); color: #fff; }
-        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--ink-soft); font-size: 0.875rem; font-weight: 500; border-radius: var(--radius-sm); padding: 8px 20px; transition: all 0.18s; }
+        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--ink-soft); font-size: 0.875rem; font-weight: 500; border-radius: var(--radius-sm); padding: 8px 20px; transition: all 0.18s; text-decoration: none; }
         .btn-ghost:hover { background: var(--surface-2); border-color: var(--surface-3); }
-        .btn-danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; font-size: 0.875rem; border-radius: var(--radius-sm); padding: 9px 20px; transition: all 0.18s; }
-        .btn-danger-solid:hover { background: #b91c1c; border-color: #b91c1c; }
-        .btn-success-solid { background: var(--success); border-color: var(--success); color: #fff; font-weight: 600; font-size: 0.875rem; border-radius: var(--radius-sm); padding: 9px 20px; transition: all 0.18s; }
-        .btn-success-solid:hover { background: #15803d; border-color: #15803d; }
         .btn-sm { padding: 6px 14px !important; font-size: 0.8rem !important; }
 
         /* ── CARDS ── */
         .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
-        .card-elevated { box-shadow: var(--shadow); }
         .card:hover { box-shadow: var(--shadow); }
 
         /* ── FORM CONTROLS ── */
@@ -190,107 +151,48 @@
             font-size: 0.9rem;
             padding: 10px 14px;
             transition: all 0.18s;
-            font-family: var(--font-body);
         }
         .form-control:focus, .form-select:focus {
             background: var(--white);
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(91,94,244,0.12);
-            color: var(--ink);
         }
         .form-control::placeholder { color: var(--ink-mute); }
-        .form-label { font-size: 0.83rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.01em; }
-        .input-group-text { background: var(--surface); border: 1.5px solid var(--surface-3); color: var(--ink-mute); font-size: 0.9rem; }
-        textarea.form-control { resize: vertical; min-height: 100px; }
+        .form-label { font-size: 0.83rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
 
         /* ── BADGES ── */
         .status-badge {
             display: inline-flex; align-items: center; gap: 5px;
             font-size: 0.75rem; font-weight: 600;
-            padding: 4px 10px; border-radius: 40px; letter-spacing: 0.02em;
+            padding: 4px 10px; border-radius: 40px;
         }
         .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
         .status-badge.accepted { color: var(--success); background: var(--success-bg); }
         .status-badge.rejected { color: var(--danger); background: var(--danger-bg); }
         .status-badge.manual_review, .status-badge.review { color: var(--review); background: var(--review-bg); }
-        .status-badge.active { color: var(--success); background: var(--success-bg); }
-        .status-badge.closed { color: var(--ink-mute); background: var(--surface-2); }
-        .status-badge.draft { color: var(--warning); background: var(--warning-bg); }
-
-        /* ── PAGE HEADER ── */
-        .page-header {
-            padding: 32px 0 24px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 32px;
-        }
-        .page-title { font-family: var(--font-serif); font-size: 1.9rem; color: var(--ink); margin: 0; letter-spacing: -0.3px; line-height: 1.2; }
-        .page-sub { font-size: 0.9rem; color: var(--ink-mute); margin-top: 4px; }
 
         /* ── BREADCRUMB ── */
         .breadcrumb { font-size: 0.8rem; margin-bottom: 6px; }
         .breadcrumb-item a { color: var(--ink-mute); text-decoration: none; }
         .breadcrumb-item a:hover { color: var(--accent); }
         .breadcrumb-item.active { color: var(--ink-soft); }
-        .breadcrumb-item + .breadcrumb-item::before { color: var(--surface-3); }
-
-        /* ── STAT CARDS ── */
-        .stat-card {
-            background: var(--white);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 24px;
-            position: relative; overflow: hidden;
-        }
-        .stat-card .stat-num { font-family: var(--font-serif); font-size: 2.4rem; color: var(--ink); line-height: 1; }
-        .stat-card .stat-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-mute); margin-top: 4px; }
-        .stat-card .stat-icon { position: absolute; top: 20px; right: 20px; font-size: 1.5rem; opacity: 0.12; }
-
-        
-        /* ── TABLE ── */
-        .data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-        .data-table thead tr { background: var(--surface); }
-        .data-table thead th { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); padding: 12px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-        .data-table tbody tr { transition: background 0.14s; }
-        .data-table tbody tr:hover { background: var(--surface); }
-        .data-table tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; }
-        .data-table tbody tr:last-child td { border-bottom: none; }
-
-        /* ── PROGRESS ── */
-        .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
-        .score-bar { height: 4px; border-radius: 99px; background: var(--surface-2); flex: 1; overflow: hidden; }
-        .score-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
 
         /* ── DROPDOWN ── */
         .dropdown-menu { border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 6px; }
         .dropdown-item { border-radius: var(--radius-sm); font-size: 0.875rem; padding: 8px 12px; color: var(--ink-soft); }
         .dropdown-item:hover { background: var(--surface); color: var(--ink); }
-        .dropdown-item.text-danger:hover { background: var(--danger-bg); color: var(--danger); }
 
         /* ── UTILS ── */
         .text-accent { color: var(--accent); }
-        .text-ink-mute { color: var(--ink-mute); }
         .font-mono { font-family: var(--font-mono); }
-        .rounded-pill { border-radius: 40px !important; }
-        .divider { height: 1px; background: var(--border); margin: 20px 0; }
         .fade-up { animation: fadeUp 0.35s ease both; }
         @keyframes fadeUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
         .stagger-1 { animation-delay: 0.05s; }
         .stagger-2 { animation-delay: 0.10s; }
         .stagger-3 { animation-delay: 0.15s; }
-        .stagger-4 { animation-delay: 0.20s; }
-
-        /* ── THEME ANIMATIONS ── */
-        .pulse-accent { animation: pulseAccent 1.5s ease-in-out infinite; }
-        @keyframes pulseAccent { 0%, 100% { background-color: var(--accent-3); } 50% { background-color: var(--accent-2); } }
 
         .bounce-in { animation: bounceIn 0.4s ease both; }
         @keyframes bounceIn { 0% { opacity:0; transform: scale(0.3); } 50% { opacity:1; transform: scale(1.05); } 70% { transform: scale(0.9); } 100% { opacity:1; transform: scale(1); } }
-
-        .slide-in-right { animation: slideInRight 0.3s ease both; }
-        @keyframes slideInRight { from { opacity:0; transform: translateX(30px); } to { opacity:1; transform: translateX(0); } }
-
-        .glow-accent { animation: glowAccent 2s ease-in-out infinite alternate; }
-        @keyframes glowAccent { from { box-shadow: 0 0 5px var(--accent-3); } to { box-shadow: 0 0 20px var(--accent-2); } }
 
         .loading-dots::after {
             content: '';
@@ -306,34 +208,6 @@
         /* ── FOOTER ── */
         footer { background: var(--white); border-top: 1px solid var(--border); padding: 28px 0; margin-top: 64px; }
         footer p { font-size: 0.8rem; color: var(--ink-mute); margin: 0; }
-        footer a { font-size: 0.8rem; color: var(--ink-mute); text-decoration: none; }
-        footer a:hover { color: var(--accent); }
-
-        /* Spinner overlay */
-        #plagiarism-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(15,15,17,0.6); backdrop-filter: blur(6px);
-            z-index: 9999; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
-            animation: fadeIn 0.3s ease;
-        }
-        #plagiarism-overlay.show { display: flex; }
-        .spinner-ring {
-            width: 52px; height: 52px;
-            border: 3px solid rgba(255,255,255,0.15);
-            border-top-color: var(--accent-2);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* Code / mono blocks */
-        .code-block {
-            background: var(--ink); color: #e2e8f0;
-            border-radius: var(--radius-sm); padding: 14px 18px;
-            font-family: var(--font-mono); font-size: 0.8rem;
-            line-height: 1.6; overflow-x: auto;
-        }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -347,49 +221,12 @@
 <!-- NAVBAR -->
 <nav class="navbar sticky-top">
     <div class="container d-flex align-items-center gap-1" style="height:var(--nav-h);">
-        <a class="navbar-brand me-4" href="{{ url_for('dashboard') }}">
+        <a class="navbar-brand me-4" href="{{ url_for('index') }}">
             <span class="brand-dot"></span> Scholaris
         </a>
-
-        {% if current_user.is_authenticated %}
         <div class="d-flex align-items-center gap-1 me-auto">
-            <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard</a>
-            {% if current_user.role == 'faculty' %}
-                <a class="nav-pill" href="{{ url_for('create_course') }}">Courses</a>
-            {% elif current_user.role == 'admin' %}
-                <a class="nav-pill" href="{{ url_for('admin_users') }}">User Management</a>
-                <a class="nav-pill" href="{{ url_for('dashboard') }}">System Stats</a>
-            {% endif %}
-        </div>
-        {% else %}
-        <div class="me-auto"></div>
-        {% endif %}
-
-        <div class="d-flex align-items-center gap-2">
-            {% if current_user.is_authenticated %}
-                <div class="dropdown">
-                    <button class="btn-nav-user" data-bs-toggle="dropdown">
-                        <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
-                        <span>{{ current_user.username }}</span>
-                        <span class="role-chip {{ current_user.role }}">{{ current_user.role }}</span>
-                        <i class="bi bi-chevron-down" style="font-size:0.7rem; color:var(--ink-mute);"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end mt-2" style="min-width:200px;">
-                        <li class="px-3 py-2">
-                            <p class="mb-0" style="font-size:0.8rem; color:var(--ink-mute);">Signed in as</p>
-                            <p class="mb-0 fw-600" style="font-size:0.875rem;">{{ current_user.username }}</p>
-                        </li>
-                        <li><hr class="dropdown-divider my-1"></li>
-                        <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Profile</a></li>
-                        <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
-                        <li><hr class="dropdown-divider my-1"></li>
-                        <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
-                    </ul>
-                </div>
-            {% else %}
-                <a href="{{ url_for('login') }}" class="btn-ghost">Login</a>
-                <a href="{{ url_for('signup') }}" class="btn-primary" style="border-radius:var(--radius-sm);">Get started</a>
-            {% endif %}
+            <a class="nav-pill" href="{{ url_for('new_scan') }}"><i class="bi bi-upload me-1"></i>New Scan</a>
+            <a class="nav-pill" href="{{ url_for('history') }}"><i class="bi bi-clock-history me-1"></i>History</a>
         </div>
     </div>
 </nav>
@@ -414,51 +251,25 @@
     {% endwith %}
 </div>
 
-<!-- PLAGIARISM SPINNER OVERLAY -->
-<div id="plagiarism-overlay">
-    <div class="spinner-ring pulse-accent"></div>
-    <div style="color:#fff; font-size:1.1rem; font-weight:600; text-align:center; margin-top:16px;">
-        <div>Running Integrity Scan</div>
-        <div style="font-size:0.8rem; opacity:0.8; margin-top:4px;" class="loading-dots">Please wait</div>
-    </div>
-    <p style="color:rgba(255,255,255,0.5); font-size:0.78rem; margin:8px 0 0 0; text-align:center;">(up to 10 seconds)</p>
-</div>
-
 <main style="min-height: calc(100vh - var(--nav-h) - 120px);">
     {% block content %}{% endblock %}
 </main>
 
 <footer>
     <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <p>&copy; 2026 Scholaris · Academic Integrity Platform</p>
-        <div class="d-flex gap-4">
-            <a href="#">Support</a>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
-        </div>
+        <p>&copy; 2026 Scholaris · Bulk Plagiarism Detection</p>
     </div>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Auto-dismiss toasts after 5s
+    // Auto-dismiss toasts
     setTimeout(() => {
         document.querySelectorAll('.flash-toast').forEach(t => {
             t.style.animation = 'slideIn 0.25s ease reverse';
             setTimeout(() => t.remove(), 250);
         });
     }, 5000);
-
-    // Show plagiarism spinner on submit forms
-    document.addEventListener('DOMContentLoaded', () => {
-        const submitForm = document.getElementById('submission-form');
-        if (submitForm) {
-            submitForm.addEventListener('submit', (e) => {
-                const overlay = document.getElementById('plagiarism-overlay');
-                if (overlay) overlay.classList.add('show');
-            });
-        }
-    });
 </script>
 {% block extra_scripts %}{% endblock %}
 </body>

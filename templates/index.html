@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Scholaris — Academic Integrity Platform{% endblock %}
+{% block title %}Scholaris — Bulk Plagiarism Detection{% endblock %}
 {% block content %}
 
 <style>
@@ -66,14 +66,6 @@
         display: flex; align-items: center; gap: 16px; margin-top: 40px;
         padding-top: 32px; border-top: 1px solid var(--border);
     }
-    .proof-avatars { display: flex; }
-    .proof-avatar {
-        width: 32px; height: 32px; border-radius: 50%;
-        background: var(--accent-3); border: 2px solid var(--white);
-        margin-left: -8px; display: flex; align-items: center; justify-content: center;
-        font-size: 0.72rem; font-weight: 700; color: var(--accent);
-    }
-    .proof-avatar:first-child { margin-left: 0; }
     .proof-text { font-size: 0.83rem; color: var(--ink-mute); }
     .proof-text strong { color: var(--ink); }
 
@@ -91,59 +83,62 @@
     <div class="container py-5">
         <div class="row align-items-center g-5">
             <div class="col-lg-6 fade-up">
-                <div class="hero-eyebrow">Academic Integrity Platform</div>
+                <div class="hero-eyebrow">Bulk Plagiarism Detection</div>
                 <h1 class="hero-title">
-                    Where honest work<br>gets its <em>fair verdict</em>
+                    Upload. Detect.<br><em>Done.</em>
                 </h1>
                 <p class="hero-sub">
-                    Automated plagiarism detection with handwriting OCR, AI-text detection,
-                    and peer comparison. Built for faculty. Trusted by students.
+                    Upload a batch of documents, get instant plagiarism analysis with 
+                    AI-powered detection, peer comparison, and detailed heatmaps.
+                    No signup needed.
                 </p>
                 <div class="hero-actions">
-                    <a href="{{ url_for('signup') }}" class="btn-primary">Start for free</a>
-                    <a href="{{ url_for('login') }}" class="btn-ghost" style="border:1px solid var(--border); border-radius:var(--radius-sm);">Sign in</a>
+                    <a href="{{ url_for('new_scan') }}" class="btn-primary">
+                        <i class="bi bi-cloud-upload me-2"></i>Start New Scan
+                    </a>
+                    <a href="{{ url_for('history') }}" class="btn-ghost" style="border:1px solid var(--border); border-radius:var(--radius-sm);">
+                        <i class="bi bi-clock-history me-2"></i>View History
+                    </a>
                 </div>
                 <div class="social-proof">
-                    <div class="proof-avatars">
-                        {% for letter in ['A','B','C','D'] %}
-                        <div class="proof-avatar">{{ letter }}</div>
-                        {% endfor %}
-                    </div>
-                    <p class="proof-text mb-0"><strong>Trusted</strong> by faculty across institutions</p>
+                    <p class="proof-text mb-0">
+                        <i class="bi bi-shield-check me-1 text-accent"></i>
+                        <strong>Supports</strong> PDF, DOCX, TXT, and image files · ZIP uploads up to 1 GB
+                    </p>
                 </div>
             </div>
 
             <div class="col-lg-6 fade-up stagger-2">
                 <div class="feature-grid">
                     <div class="feature-card">
-                        <div class="feature-icon"><i class="bi bi-eye"></i></div>
-                        <div class="feature-title">Handwriting OCR</div>
-                        <div class="feature-desc">Converts scanned or photographed handwritten work into analysable text.</div>
+                        <div class="feature-icon"><i class="bi bi-files"></i></div>
+                        <div class="feature-title">Bulk Upload</div>
+                        <div class="feature-desc">Upload ZIP archives or multiple files at once. Process hundreds of documents in one go.</div>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon" style="background:#e0f2fe;color:#0369a1;"><i class="bi bi-robot"></i></div>
                         <div class="feature-title">AI Detection</div>
-                        <div class="feature-desc">Identifies GPT-generated text patterns, transition density & hedging signals.</div>
+                        <div class="feature-desc">Identifies GPT-generated text with perplexity analysis and burstiness scoring.</div>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-shield-check"></i></div>
                         <div class="feature-title">Peer Comparison</div>
-                        <div class="feature-desc">Semantic + structural + stylometric 3-signal fusion across all submissions.</div>
+                        <div class="feature-desc">Semantic + structural + stylometric 3-signal fusion across all uploaded files.</div>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon" style="background:#fce7f3;color:#be185d;"><i class="bi bi-people"></i></div>
-                        <div class="feature-title">Role-Based Access</div>
-                        <div class="feature-desc">Students see verdicts only. Faculty get full reports. Admins see everything.</div>
+                        <div class="feature-icon" style="background:#fce7f3;color:#be185d;"><i class="bi bi-sliders"></i></div>
+                        <div class="feature-title">Threshold Filter</div>
+                        <div class="feature-desc">Set your similarity threshold and instantly see only files exceeding it.</div>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-lightning-charge"></i></div>
-                        <div class="feature-title">Instant Results</div>
-                        <div class="feature-desc">Synchronous check — student waits on the same HTTP request. No polling.</div>
+                        <div class="feature-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-map"></i></div>
+                        <div class="feature-title">Heatmap View</div>
+                        <div class="feature-desc">Sentence-by-sentence color-coded analysis showing plagiarized vs original content.</div>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon" style="background:#ede9fe;color:#7c3aed;"><i class="bi bi-bar-chart-line"></i></div>
-                        <div class="feature-title">Rich Reports</div>
-                        <div class="feature-desc">Faculty view passage-level match comparisons, risk levels & OCR confidence.</div>
+                        <div class="feature-icon" style="background:#ede9fe;color:#7c3aed;"><i class="bi bi-download"></i></div>
+                        <div class="feature-title">Export Reports</div>
+                        <div class="feature-desc">Download results as CSV or Excel for record-keeping and further analysis.</div>
                     </div>
                 </div>
             </div>
